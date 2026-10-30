@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STPN · SMK to PTN</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+<style>
+:root{--a:#3B82F6;--bg:#0A0A0A;--c:#171717;--l:#262626}
+body{background:var(--bg);color:#e5e5e5;font-family:Inter,system-ui,sans-serif}
+.card{background:var(--c);border:1px solid var(--l);border-radius:14px}
+.btn{background:#1f1f1f;border:1px solid #2e2e2e;border-radius:9px;padding:7px 14px;font-size:13px;transition:.15s}
+.btn:hover:not(:disabled){background:#2a2a2a;transform:translateY(-1px)}.btn:disabled{opacity:.4}
+.pri{background:var(--a);border-color:var(--a);color:#fff}.pri:hover:not(:disabled){background:#2563eb}
+.nav{display:block;width:100%;text-align:left;padding:8px 12px;border-radius:9px;color:#a3a3a3;font-size:14px;transition:.15s}
+.nav:hover{background:#1f1f1f;color:#fff}.nav.on{background:#172554;color:#fff}
+.bar{height:12px;background:#1f1f1f;border-radius:99px;overflow:hidden}.bar>div{height:100%;background:linear-gradient(90deg,#2563eb,#60a5fa);transition:.5s}
+input,select,textarea{background:#0f0f0f;border:1px solid #2e2e2e;border-radius:9px;padding:8px 10px;width:100%;font-size:14px;color:#e5e5e5}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--a)}
+input[type=checkbox]{width:16px;height:16px;padding:0;accent-color:var(--a)}
+.opt{display:block;width:100%;text-align:left;padding:10px 14px;margin-top:8px;border:1px solid #2e2e2e;border-radius:10px;font-size:14px;transition:.15s}
+button.opt:hover{background:#1f1f1f}.sel{border-color:var(--a)!important;background:#172554}
+.ok{border-color:#22c55e!important;background:#0f2a1b}.bad{border-color:#ef4444!important;background:#2d1215}
+.nb{height:34px;border-radius:8px;font-size:12px;background:#262626;color:#a3a3a3}
+.nb.a{background:var(--a);color:#fff}.nb.f{background:#eab308;color:#000}.nb.cur{outline:2px solid #fff}
+label.k{display:block;font-size:12px;color:#a3a3a3;margin:12px 0 4px}
+.heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,12px);grid-auto-columns:12px;gap:3px}.heat i{display:block;border-radius:3px}
+details>summary{list-style:none}details>summary::-webkit-details-marker{display:none}
+.view{animation:fi .25s ease}@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes sh{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}.shake{animation:sh .3s;border-color:#ef4444!important}
+sup,sub{font-size:.7em}
+</style>
+</head>
+<body>
+<button class="md:hidden fixed top-3 left-3 z-30 btn" onclick="$('#side').classList.toggle('hidden')">☰</button>
+<div class="md:flex h-screen">
+  <aside id="side" class="hidden md:flex flex-col fixed md:static inset-y-0 left-0 z-20 w-72 shrink-0 p-4 bg-[#0A0A0A] border-r border-[#262626]"></aside>
+  <main id="main" class="flex-1 overflow-y-auto p-5 pt-16 md:p-8 md:pt-8"></main>
+</div>
+<div id="modal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"><div id="mbox" class="card p-6 max-w-sm w-full text-center"></div></div>
+<div id="toast" class="hidden fixed bottom-4 right-4 z-50 card px-4 py-2 text-sm"></div>
+
+<script>
+/* ===== Logo & favicon (canvas) ===== */
+const LOGO=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="40" height="40"><rect width="48" height="48" rx="12" fill="#000"/><rect x="1" y="1" width="46" height="46" rx="11" fill="none" stroke="#3B82F6" stroke-width="2"/><path d="M24 7 42 14 24 21 6 14z" fill="#3B82F6"/><path d="M40 15v7" stroke="#3B82F6" stroke-width="1.8" stroke-linecap="round"/><path d="M24 22c4 3 5 9 4 15h-8c-1-6 0-12 4-15z" fill="#fff"/><circle cx="24" cy="29" r="2" fill="#3B82F6"/><path d="M20 33l-3 5 3-1zM28 33l3 5-3-1z" fill="#3B82F6"/><path d="M22.5 37.5q1.5 6 3 0z" fill="#fbbf24"/></svg>`;
+(()=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=64;c.getContext('2d').drawImage(im,0,0,64,64);const l=document.createElement('link');l.rel='icon';l.href=c.toDataURL('image/png');document.head.appendChild(l)};im.src='data:image/svg+xml,'+encodeURIComponent(LOGO.replace('width="40" height="40"','width="64" height="64"'))})();
+
+/* ===== Materi: 1 baris = 1 sub-bab (judul|rumus cepat) ===== */
+const MAPEL=['Matematika Tingkat Lanjut','Kimia','Fisika'],L='ABCDE';
+const RAW=`#11|Matematika Tingkat Lanjut
+Fungsi Komposisi & Invers|(f∘g)(x)=f(g(x)); (f∘g)⁻¹=g⁻¹∘f⁻¹; f(x)=ax+b → f⁻¹(x)=(x-b)/a
+Fungsi Invers & Sifatnya|f(x)=(ax+b)/(cx+d) → f⁻¹(x)=(-dx+b)/(cx-a); f(f⁻¹(x))=x; grafik f dan f⁻¹ simetris terhadap y=x
+Persamaan Lingkaran & Kedudukan Titik Garis|(x-a)²+(y-b)²=r²; x²+y²+Ax+By+C=0 → pusat(-A/2,-B/2); garis & lingkaran: D>0 memotong, D=0 menyinggung, D<0 lepas
+Garis Singgung Lingkaran|Titik (x₁,y₁) pada lingkaran: (x₁-a)(x-a)+(y₁-b)(y-b)=r²; gradien m: y-b=m(x-a)±r√(1+m²)
+Polinomial: Teorema Sisa & Faktor|P(x):(x-h) → sisa P(h); (x-h) faktor ⇔ P(h)=0; P(x):(ax+b) → sisa P(-b/a)
+Polinomial: Akar & Operasi|ax³+bx²+cx+d=0: x₁+x₂+x₃=-b/a; x₁x₂+x₁x₃+x₂x₃=c/a; x₁x₂x₃=-d/a
+Matriks: Operasi, Determinan, Invers|det(a b; c d)=ad-bc; A⁻¹=(1/det)(d -b; -c a); (AB)⁻¹=B⁻¹A⁻¹; (AB)ᵀ=BᵀAᵀ
+Matriks: Persamaan Matriks|AX=B → X=A⁻¹B; XA=B → X=BA⁻¹; sistem 2 persamaan: x=Dx/D, y=Dy/D
+Transformasi Geometri (Translasi, Refleksi, Rotasi, Dilatasi)|Translasi (a,b): (x+a, y+b); refleksi sb-x: (x,-y); sb-y: (-x,y); y=x: (y,x); rotasi 90°: (-y,x); dilatasi k: (kx,ky)
+Barisan & Deret Aritmatika|Uₙ=a+(n-1)b; Sₙ=n/2·(2a+(n-1)b); suku tengah Uₜ=(a+Uₙ)/2
+Barisan & Deret Geometri & Tak Hingga|Uₙ=a·rⁿ⁻¹; Sₙ=a(rⁿ-1)/(r-1); S∞=a/(1-r) untuk |r|<1
+Statistika Data Kelompok & Peluang Dasar|x̄=Σfx/Σf; Median=Tb+((n/2-F)/f)·p; Modus=Tb+(d₁/(d₁+d₂))·p; P(A)=n(A)/n(S)
+#11|Kimia
+Hidrokarbon Alkana Alkena Alkuna & Isomer|Alkana CₙH₂ₙ₊₂; alkena CₙH₂ₙ; alkuna CₙH₂ₙ₋₂; isomer: rantai, posisi, fungsi
+Minyak Bumi & Bilangan Oktan|Bilangan oktan = % isooktana dalam campuran dengan n-heptana; pembakaran sempurna → CO₂+H₂O; tidak sempurna → CO
+Termokimia & Hukum Hess & Energi Ikatan|ΔH=ΣΔHf produk-ΣΔHf pereaksi; ΔH=Σ energi ikatan putus-Σ ikatan terbentuk; q=m·c·ΔT
+Laju Reaksi & Orde Reaksi|v=k[A]ᵐ[B]ⁿ; suhu naik 10°C laju ×2: v₂=v₁·2^(ΔT/10); orde total=m+n
+Kesetimbangan Kimia Kc Kp & Le Chatelier|Kc=[produk]/[pereaksi] (pangkat koefisien); Kp=Kc(RT)^Δn; Q<K → bergeser ke kanan; α=mol terurai/mol mula
+Asam Basa Kuat Lemah & pH|Kuat: [H⁺]=a·M; lemah: [H⁺]=√(Ka·M); pH=-log[H⁺]; pH+pOH=14; α=√(Ka/M)
+Larutan Buffer Asam & Basa|Asam: [H⁺]=Ka·(mol asam/mol garam); basa: [OH⁻]=Kb·(mol basa/mol asam konjugasi); pH=pKa+log(garam/asam)
+Hidrolisis Garam|Asam kuat+basa lemah: [H⁺]=√(Kw/Kb·[G]); basa kuat+asam lemah: [OH⁻]=√(Kw/Ka·[G]); Kh=Kw/Ka
+Ksp & Hubungan dengan pH|AgCl: s=√Ksp; A₂B: s=∛(Ksp/4); Q>Ksp mengendap; dari [OH⁻]: pOH=-log[OH⁻], pH=14-pOH
+Sifat Koligatif Larutan & Koloid|ΔP=Xt·P°; ΔTb=Kb·m·i; ΔTf=Kf·m·i; π=MRTi; i=1+(n-1)α
+#11|Fisika
+Vektor|R=√(A²+B²+2AB cosθ); Aₓ=A cosθ; A_y=A sinθ; A·B=AB cosθ; |A×B|=AB sinθ
+Dinamika Rotasi & Momen Inersia|τ=Iα; I=Σmr²; silinder pejal ½MR²; batang (tengah) 1/12 ML²; L=Iω; Ek rot=½Iω²
+Kesetimbangan Benda Tegar|ΣF=0; Στ=0; τ=F·d·sinθ; titik berat: x=Σwx/Σw
+Fluida Statis (Hidrostatis, Pascal, Archimedes)|P=ρgh; F₁/A₁=F₂/A₂; Fa=ρ_fluida·g·V_tercelup; melayang ρ_benda=ρ_fluida
+Fluida Dinamis (Kontinuitas & Bernoulli)|A₁v₁=A₂v₂; P+½ρv²+ρgh=konstan; Torricelli v=√(2gh); Q=A·v
+Gelombang Bunyi (Dawai & Pipa Organa)|Dawai fₙ=(n+1)v/2L; pipa terbuka fₙ=(n+1)v/2L; tertutup fₙ=(2n+1)v/4L; TI=10 log(I/I₀); Doppler f=(v±vp)/(v±vs)·fs
+Gelombang Cahaya (Interferensi Difraksi)|Celah ganda: d·sinθ=nλ (terang), d·y/L=nλ; celah tunggal: a·sinθ=nλ (gelap); kisi d=1/N
+Suhu Kalor Pemuaian|Q=mcΔT; Q=mL; ΔL=L₀αΔT; Asas Black: Q lepas=Q terima; K=°C+273
+Termodinamika Hukum 1 & 2|ΔU=Q-W; W=PΔV; η=1-Q₂/Q₁=1-T₂/T₁; PV=nRT; ΔU=3/2 nRΔT
+Alat Optik|1/f=1/s+1/s'; M=|s'/s|; P=100/f (dioptri); lup tak berakomodasi M=25/f; mikroskop M=Mob·Mok
+#12|Matematika Tingkat Lanjut
+Limit Fungsi Aljabar & Trigonometri|lim (x²-a²)/(x-a)=2a; lim sinx/x=1; lim tanx/x=1; lim (1-cosx)/x²=½
+Limit Tak Hingga & Bentuk Tak Tentu & Kontinuitas|Pangkat sama → rasio koefisien; pembilang lebih rendah → 0; lim(√(ax²+bx+c)-√(ax²+qx+r))=(b-q)/(2√a); kontinu: lim f=f(a)
+Aturan Dasar Turunan & Aturan Rantai|(xⁿ)'=nxⁿ⁻¹; (uv)'=u'v+uv'; (u/v)'=(u'v-uv')/v²; (f∘g)'=f'(g(x))·g'(x)
+Turunan Fungsi Trigonometri, Eksponen, Logaritma, Implisit|(sinx)'=cosx; (cosx)'=-sinx; (tanx)'=sec²x; (eˣ)'=eˣ; (lnx)'=1/x; (aˣ)'=aˣ ln a; implisit: turunkan kedua ruas, dy/dx
+Persamaan Garis Singgung & Fungsi Naik Turun & Titik Stasioner|y-y₁=m(x-x₁), m=f'(x₁); naik f'>0; turun f'<0; stasioner f'=0
+Aplikasi Turunan Maksimum Minimum & Optimasi & Kecepatan|f''>0 minimum; f''<0 maksimum; v=ds/dt; a=dv/dt; optimasi: buat fungsi satu variabel lalu f'=0
+Integral Tak Tentu Aturan Dasar & Trigonometri|∫xⁿdx=xⁿ⁺¹/(n+1)+C; ∫sinx dx=-cosx+C; ∫cosx dx=sinx+C; ∫eˣdx=eˣ+C; ∫1/x dx=ln|x|+C
+Teknik Integral Substitusi & Parsial|Substitusi: ∫f(g)g'dx=∫f(u)du; parsial: ∫u dv=uv-∫v du (pilih u: ALIPT)
+Integral Tentu & Sifatnya|∫ₐᵇf dx=F(b)-F(a); ∫ₐᵃ=0; ∫ₐᵇ=-∫ᵦₐ; ∫ₐᵇ=∫ₐᶜ+∫ᶜᵇ
+Aplikasi Integral Luas Daerah Bawah & Antara Kurva|L=∫ₐᵇ|f(x)|dx; antara kurva L=∫ₐᵇ(y_atas-y_bawah)dx; parabola: L=D√D/(6a²)
+Aplikasi Integral Volume Benda Putar|Sumbu-x: V=π∫ₐᵇy²dx; antara dua kurva: V=π∫(y₁²-y₂²)dx; sumbu-y: V=π∫x²dy
+Dimensi Tiga Jarak & Sudut|Diagonal bidang a√2; diagonal ruang a√3; jarak titik-garis/bidang: proyeksi tegak lurus; sudut: cosθ=(a²+b²-c²)/(2ab)
+Distribusi Peluang Binomial & Normal|P(X=k)=C(n,k)pᵏqⁿ⁻ᵏ; μ=np; σ²=npq; normal: z=(x-μ)/σ
+Peluang: Permutasi, Kombinasi & Kejadian Majemuk|P(n,r)=n!/(n-r)!; C(n,r)=n!/(r!(n-r)!); P(A∪B)=P(A)+P(B)-P(A∩B); P(A|B)=P(A∩B)/P(B)
+#12|Kimia
+Struktur Atom & Konfigurasi & SPU|Aufbau, Hund, Pauli; 1s 2s 2p 3s 3p 4s 3d 4p; golongan=elektron valensi, periode=jumlah kulit; bilangan kuantum n,l,m,s
+Ikatan Kimia & Bentuk Molekul VSEPR|Ion: logam+nonlogam; kovalen: PEI & PEB; VSEPR AXₙEₘ: linear 180°, trigonal 120°, tetrahedral 109,5°; gaya antarmolekul: London<dipol<ikatan H
+Redoks & Penyetaraan & Sel Volta|Biloks unsur=0, O=-2, H=+1; oksidasi = biloks naik; E°sel=E°katoda-E°anoda; anoda(-) oksidasi, katoda(+) reduksi
+Elektrolisis & Hukum Faraday|w=(Ar/n)·i·t/96500; Q=i·t; katoda: reduksi; anoda: oksidasi; 1 F=96500 C
+Kimia Unsur Golongan|Alkali & alkali tanah: reaktivitas naik ke bawah; halogen: F₂>Cl₂>Br₂>I₂ (oksidator); gas mulia stabil; periode 3: sifat logam→nonlogam
+Benzena & Turunannya & Polimer|C₆H₆; reaksi substitusi (nitrasi, halogenasi, alkilasi); turunan: fenol, toluena, anilin; polimer adisi vs kondensasi
+#12|Fisika
+Listrik Statis Coulomb & Kapasitor|F=kq₁q₂/r²; E=kq/r²; V=kq/r; C=Q/V; seri 1/C=Σ1/Cᵢ; paralel C=ΣCᵢ; W=½CV²
+Listrik Dinamis Ohm & Kirchhoff|V=IR; Rs=ΣR; 1/Rp=Σ1/R; P=VI=I²R; Kirchhoff I: ΣI masuk=ΣI keluar; II: ΣE+ΣIR=0
+Medan Magnet & Gaya Lorentz|Kawat lurus B=μ₀I/2πa; lingkaran B=μ₀I/2a; solenoida B=μ₀nI; F=BIL sinθ; F=qvB sinθ
+Induksi Elektromagnetik Faraday Lenz|ε=-N dΦ/dt; ε=BLv; Φ=BA cosθ; trafo Vp/Vs=Np/Ns
+Arus Bolak Balik AC|Xₗ=ωL; X_c=1/ωC; Z=√(R²+(Xₗ-X_c)²); resonansi Xₗ=X_c, f=1/(2π√LC); P=VI cosφ
+Fisika Kuantum Fotolistrik|E=hf=hc/λ; Ek=hf-W₀; λ=h/p; Wien λmax·T=2,9×10⁻³; P=eσAT⁴
+Fisika Inti Radioaktivitas|N=N₀(½)^(t/T); A=λN; λ=0,693/T; E=Δm×931 MeV
+Relativitas Khusus|γ=1/√(1-v²/c²); t=γt₀; L=L₀/γ; E=mc²; penjumlahan kecepatan (v₁+v₂)/(1+v₁v₂/c²)`;
+const MATERI=[];let _k,_m;RAW.split('\n').forEach(l=>{if(l[0]=='#'){[_k,_m]=l.slice(1).split('|');_k=+_k}else{const i=l.indexOf('|'),b=l.slice(0,i).trim();MATERI.push({k:_k,m:_m,b,r:l.slice(i+1).trim(),id:_k+'|'+b})}});
+
+/* ===== Database (IndexedDB via localForage) ===== */
+const mk=n=>localforage.createInstance({name:'stpn',storeName:n});
+const DB={prog:mk('progressMateri'),q:mk('customQuestions'),to:mk('tryoutHistory'),ses:mk('studySessions'),notes:mk('notes'),app:mk('appState')};
+const $=s=>document.querySelector(s);
+let P={},CQ=[],HIST=[],SESS=[],NOTES={},view='dash',bankTab='list',editId=null,IMG=null,BF={m:'',k:'',b:''},TO=null,RES=null,AC=null;
+const T={dur:3600,left:3600,run:false,end:0,started:false,sel:'',sig:null};
+let sy;
+function stat(t){const e=$('#sy');if(e)e.textContent=t}
+function sync(manual){clearTimeout(sy);sy=setTimeout(async()=>{try{const r=await fetch('http://localhost:3000/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(snap()),signal:AbortSignal.timeout(1500)});if(!r.ok)throw 0;stat('✓ Tersinkron ke API');if(manual)toast('Sinkron ke API berhasil')}catch(e){stat('● Lokal (IndexedDB)');if(manual)toast('Backend tidak aktif — data tetap aman di IndexedDB')}},manual?0:1500)}
+const put=async(s,k,v)=>{await DB[s].setItem(k,v);sync()},del=async(s,k)=>{await DB[s].removeItem(k);sync()};
+const snap=()=>({app:'STPN',version:2,progressMateri:P,customQuestions:CQ,tryoutHistory:HIST,studySessions:SESS,notes:NOTES});
+function expAll(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(snap(),null,2)],{type:'application/json'}));a.download='stpn-backup-'+dk()+'.json';a.click()}
+function impAll(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const j=JSON.parse(r.result);if(j.app!=='STPN')throw 0;
+  for(const k in j.progressMateri||{}){P[k]=true;await DB.prog.setItem(k,true)}for(const k in j.notes||{}){NOTES[k]=j.notes[k];await DB.notes.setItem(k,j.notes[k])}
+  const mg=async(a,arr,s)=>{for(const x of arr||[]){await DB[s].setItem(x.id,x);const i=a.findIndex(z=>z.id==x.id);i<0?a.push(x):a[i]=x}};
+  await mg(CQ,j.customQuestions,'q');await mg(HIST,j.tryoutHistory,'to');await mg(SESS,j.studySessions,'ses');HIST.sort((a,b)=>a.date-b.date);sync();toast('Import berhasil');go()}catch(x){toast('File backup tidak valid')}};r.readAsText(f);e.target.value=''}
+
+/* ===== Helpers ===== */
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function fmt(s){return esc(s).replace(/\$/g,'').replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g,'($1)/($2)').replace(/\\sqrt\{([^}]*)\}/g,'√($1)').replace(/\\cdot/g,'·').replace(/\\times/g,'×').replace(/\\infty/g,'∞').replace(/\\pi/g,'π').replace(/\^\{([^}]*)\}/g,'<sup>$1</sup>').replace(/\^(-?\w)/g,'<sup>$1</sup>').replace(/_\{([^}]*)\}/g,'<sub>$1</sub>').replace(/_(\w)/g,'<sub>$1</sub>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')}
+const R=(a,b)=>a+Math.floor(Math.random()*(b-a+1)),pick=a=>a[R(0,a.length-1)],shuf=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=R(0,i);[a[i],a[j]]=[a[j],a[i]]}return a};
+const sg=n=>n<0?''+n:'+'+n,fmtT=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+const dk=(d=new Date())=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.remove('hidden');clearTimeout(tt);tt=setTimeout(()=>t.classList.add('hidden'),2400)}
+function modal(h){$('#mbox').innerHTML=h;$('#modal').classList.remove('hidden')}
+function closeModal(){$('#modal').classList.add('hidden')}
+function beep(){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();[880,1100,1320].forEach((f,i)=>{const o=AC.createOscillator(),g=AC.createGain(),t=AC.currentTime+i*.25;o.frequency.value=f;o.connect(g);g.connect(AC.destination);g.gain.setValueAtTime(.2,t);g.gain.exponentialRampToValueAtTime(.001,t+.22);o.start(t);o.stop(t+.25)})}catch(e){}}
+
+/* ===== Soal default otomatis (jawaban dihitung program) ===== */
+const fm=(k,p)=>MATERI.find(x=>x.k==k&&x.b.startsWith(p));
+function mkQ(k,p,q,c,w,e){const x=fm(k,p),o=shuf([c,...[...new Set(w)].filter(z=>z!==c).slice(0,4)]);return{m:x.m,k,b:x.b,q,o,a:o.indexOf(c),e}}
+function mkN(k,p,q,c,e,u='',s){const r=x=>Math.round(x*100)/100;c=r(c);s=s||(Math.abs(c)>=20?Math.round(Math.abs(c)/10):1);
+  const w=shuf([c+s,c-s,c+2*s,c-2*s,c+3*s,c-3*s,c*2,c/2].map(r).filter(x=>x!==c&&isFinite(x)&&(c<=0||x>=0)));return mkQ(k,p,q,c+u,w.map(x=>x+u),e)}
+const comb=(n,r)=>r==2?n*(n-1)/2:n*(n-1)*(n-2)/6,EP={Mg:-2.37,Zn:-.76,Fe:-.44,Cu:.34,Ag:.8};
+const G=[
+()=>{const a=R(2,5),b=R(1,6),c=R(2,4),d=R(1,5),x=R(1,4),g=c*x+d;return mkN(11,'Fungsi Komposisi',`Diketahui f(x)=${a}x+${b} dan g(x)=${c}x+${d}. Nilai (f∘g)(${x}) adalah…`,a*g+b,`g(${x})=${g}; f(${g})=${a*g+b}.`)},
+()=>{const a=R(1,3),b=R(-4,4),c=R(-5,5),d=R(-6,6),h=R(1,3),v=a*h**3+b*h*h+c*h+d;return mkN(11,'Polinomial: Teorema',`Sisa pembagian P(x)=${a}x^3${sg(b)}x^2${sg(c)}x${sg(d)} oleh (x−${h}) adalah…`,v,`Teorema sisa: P(${h})=${v}.`)},
+()=>{const a=R(1,6),b=R(1,6),c=R(1,6),d=R(1,6);return mkN(11,'Matriks: Operasi',`Determinan matriks A = (${a} ${b}; ${c} ${d}) adalah…`,a*d-b*c,`det = ad − bc = ${a}·${d} − ${b}·${c}.`)},
+()=>{const n=R(3,10);return mkN(11,'Hidrokarbon',`Rumus umum alkana C_nH_{2n+2}. Jumlah atom H pada alkana dengan ${n} atom C adalah…`,2*n+2,`2(${n})+2 = ${2*n+2}.`)},
+()=>{const x=R(-300,-100),y=R(-200,200);return mkN(11,'Termokimia',`Diketahui A → B ΔH=${x} kJ dan B → C ΔH=${y} kJ. ΔH untuk A → C adalah…`,x+y,`Hukum Hess: ${x} + (${y}) = ${x+y} kJ.`,' kJ',40)},
+()=>{const a=pick([1,2]),b=pick([1,2,5]),k=R(2,9),c=k*a*a*b;return mkN(11,'Kesetimbangan Kimia',`Pada kesetimbangan 2A + B ⇌ C, konsentrasi A=${a} M, B=${b} M, C=${c} M. Nilai Kc adalah…`,k,`Kc = [C]/([A]²[B]) = ${c}/(${a*a}·${b}) = ${k}.`)},
+()=>{const n=R(2,5),t=pick(['HCl','NaOH']);return mkN(11,'Asam Basa',`pH larutan ${t} 10^{-${n}} M adalah…`,t=='HCl'?n:14-n,t=='HCl'?`pH = −log 10^{-${n}} = ${n}.`:`pOH=${n}, pH=14−${n}=${14-n}.`)},
+()=>{const[a,g,p]=pick([[10,1,4],[1,1,5],[1,10,6],[1,100,7]]);return mkN(11,'Larutan Buffer',`Campuran ${a} mmol CH_3COOH dan ${g} mmol CH_3COONa (Ka=10^{-5}) membentuk buffer. pH campuran adalah…`,p,`[H^+] = Ka × ${a}/${g}; pH = ${p}.`)},
+()=>{const n=R(2,5);return mkQ(11,'Ksp',`Kelarutan AgCl dalam air adalah 10^{-${n}} M. Nilai Ksp AgCl adalah…`,`10^{-${2*n}}`,[`10^{-${n}}`,`10^{-${2*n+1}}`,`10^{-${n+1}}`,`10^{-${2*n-1}}`,`10^{-${3*n}}`],`Ksp = s·s = 10^{-${2*n}}.`)},
+()=>{const h=R(2,30);return mkN(11,'Fluida Statis',`Tekanan hidrostatis pada kedalaman ${h} m dalam air (ρ=1000 kg/m^3, g=10 m/s^2) adalah…`,10*h,`P=ρgh=1000·10·${h}=${10000*h} Pa = ${10*h} kPa.`,' kPa')},
+()=>{const f=R(2,50),l=R(1,10);return mkN(11,'Gelombang Bunyi',`Gelombang berfrekuensi ${f} Hz dengan panjang gelombang ${l} m memiliki cepat rambat…`,f*l,`v = λ·f = ${l}·${f}.`,' m/s')},
+()=>{const t=pick([500,600,800,1000]),k=R(2,8),t2=t*k/10;return mkN(11,'Termodinamika',`Mesin Carnot bersuhu tinggi ${t} K dan suhu rendah ${t2} K. Efisiensinya adalah…`,(10-k)*10,`η = 1 − ${t2}/${t} = ${(10-k)*10}%.`,' %',10)},
+()=>{const c=R(1,4),r=R(1,5);return mkN(12,'Limit Tak Hingga',`Nilai lim x→∞ (${r*c}x^2+${R(1,9)}x)/(${c}x^2+${R(1,9)}) adalah…`,r,`Pangkat tertinggi sama: ${r*c}/${c} = ${r}.`)},
+()=>{const a=R(1,3),h=R(1,4),c=R(1,20);return mkN(12,'Aplikasi Turunan',`Nilai minimum f(x)=${a}x^2${sg(-2*a*h)}x${sg(c)} adalah…`,c-a*h*h,`f'(x)=0 → x=${h}; f(${h})=${c-a*h*h}.`)},
+()=>{const a=R(1,3),b=R(1,4),x=R(1,3);return mkN(12,'Aturan Dasar',`Jika f(x)=${a}x^3+${b}x^2, maka f'(${x}) adalah…`,3*a*x*x+2*b*x,`f'(x)=${3*a}x^2+${2*b}x → f'(${x})=${3*a*x*x+2*b*x}.`)},
+()=>{const t=R(1,5),k=R(1,6);return mkN(12,'Integral Tentu',`Nilai ∫ dari 0 sampai ${t} untuk (2x+${k}) dx adalah…`,t*t+k*t,`[x^2+${k}x] dari 0 ke ${t} = ${t*t+k*t}.`)},
+()=>{const n=R(5,9),r=pick([2,3]);return mkN(12,'Peluang',`Dari ${n} siswa dipilih ${r} orang sebagai pengurus tanpa memperhatikan urutan. Banyak cara memilih adalah…`,comb(n,r),`C(${n},${r}) = ${comb(n,r)}.`)},
+()=>{const x=pick([['Mn pada KMnO_4',7],['Cr pada K_2Cr_2O_7',6],['S pada H_2SO_4',6],['N pada HNO_3',5],['Cl pada KClO_3',5],['P pada H_3PO_4',5]]);return mkN(12,'Redoks',`Bilangan oksidasi ${x[0]} adalah…`,x[1],`Jumlah biloks senyawa netral = 0, sehingga biloks = +${x[1]}.`)},
+()=>{const[a,c]=shuf(Object.keys(EP)).slice(0,2).sort((p,q)=>EP[p]-EP[q]);return mkN(12,'Redoks',`Diketahui E° ${a}=${EP[a]} V dan E° ${c}=${EP[c]} V. E°sel dari sel Volta ${a}|${c} adalah…`,EP[c]-EP[a],`E°sel = E°katoda − E°anoda = ${EP[c]} − (${EP[a]}).`,' V',.2)},
+()=>{const x=pick([['Rumus molekul benzena adalah…','C_6H_6',['C_6H_{12}','C_6H_{14}','C_5H_6','C_7H_8'],'Benzena: 6 atom C dan 6 atom H.'],['Reaksi benzena dengan Br_2 (katalis FeBr_3) disebut reaksi…','substitusi',['adisi','eliminasi','oksidasi','polimerisasi'],'Benzena stabil sehingga bereaksi lewat substitusi.'],['Senyawa turunan benzena yang mengandung gugus −OH adalah…','fenol',['toluena','anilin','stirena','benzaldehida'],'Fenol = benzena dengan gugus hidroksil.']]);return mkQ(12,'Benzena',x[0],x[1],x[2],x[3])},
+()=>{const[a,b,p]=pick([[6,3,2],[12,4,3],[20,5,4],[30,6,5],[10,10,5],[12,6,4]]);return mkN(12,'Listrik Dinamis',`Dua resistor ${a} Ω dan ${b} Ω dirangkai paralel. Hambatan penggantinya adalah…`,p,`Rp = (${a}·${b})/(${a}+${b}) = ${p} Ω.`,' Ω')},
+()=>{const r=pick([4,10,20,25,50,100]),v=R(1,5)*10;return mkN(12,'Listrik Dinamis',`Sebuah resistor ${r} Ω dipasang pada tegangan ${v} V. Daya yang diserap adalah…`,v*v/r,`P = V²/R = ${v*v}/${r} = ${v*v/r} W.`,' W')},
+()=>{const B=R(1,5),I=R(2,6),l=R(1,5);return mkN(12,'Medan Magnet',`Kawat sepanjang ${l} m dialiri arus ${I} A tegak lurus medan magnet ${B} T. Gaya Lorentz yang dialami kawat adalah…`,B*I*l,`F = B·I·L = ${B}·${I}·${l}.`,' N')},
+()=>{const t=R(2,10),n=R(1,4),N0=16*R(1,8);return mkN(12,'Fisika Inti',`Waktu paruh suatu unsur ${t} hari. Mula-mula tersedia ${N0} gram. Setelah ${n*t} hari, massa yang tersisa adalah…`,N0/2**n,`Terjadi ${n} kali waktu paruh: ${N0}/2^${n} = ${N0/2**n} g.`,' g')}
+];
+const genQ=()=>pick(G)();
+
+/* ===== Timer belajar (state global) ===== */
+const tLeft=()=>T.run?Math.max(0,Math.round((T.end-Date.now())/1000)):T.left,tName=()=>T.sel===''?'-':MATERI[T.sel].b;
+const tSave=()=>DB.app.setItem('timer',{left:tLeft(),run:T.run,end:T.end,started:T.started,sel:T.sel});
+function tSel(v){T.sel=v;tSave();tUI()}
+function tStart(){if(T.run)return;if(T.sel===''){const s=$('#tsel');if(s){s.classList.remove('shake');void s.offsetWidth;s.classList.add('shake')}return toast('Pilih materi yang dipelajari dulu')}
+  try{AC=AC||new(window.AudioContext||window.webkitAudioContext)()}catch(e){}T.run=true;T.started=true;T.end=Date.now()+T.left*1000;tSave();tUI()}
+function tPause(){T.left=tLeft();T.run=false;tSave();tUI()}
+function tReset(){T.run=false;T.started=false;T.left=T.dur;tSave();tUI()}
+function tStop(){const el=T.dur-tLeft();if(el>=30){logSession(el);toast(`Tersimpan ${Math.round(el/60)} menit belajar`)}tReset();if(view==='dash')go()}
+function logSession(sec){const e={id:'s'+Date.now(),date:dk(),sec,materi:tName(),ts:Date.now()};SESS.push(e);put('ses',e.id,e)}
+function finishSession(silent){logSession(T.dur);const n=tName();T.run=false;T.started=false;T.left=T.dur;tSave();if(!silent)beep();
+  modal(`<div class="text-5xl mb-3">🎉</div><h2 class="text-xl font-bold mb-1">Sesi Selesai!</h2><p class="text-zinc-400 mb-4">60 menit belajar <b>${esc(n)}</b> tersimpan untuk streak harianmu.</p><button class="btn pri" onclick="closeModal()">Lanjut</button>`);if(view==='dash')go();else tUI()}
+function ctl(){return(T.run?`<button class="btn pri" onclick="tPause()">⏸ PAUSE</button>`:`<button class="btn pri" onclick="tStart()">▶ ${T.started?'LANJUT':'START'}</button>`)+`<button class="btn" onclick="tReset()">↺ RESET</button>`+(T.started?`<button class="btn" style="color:#f87171" onclick="tStop()">■ SELESAI</button>`:'')}
+function tUI(){const l=tLeft(),t=fmtT(l),set=(s,h)=>{const e=$(s);if(e)e.innerHTML=h};
+  set('#tdisp',t);const b=$('#tbar');if(b)b.style.width=(T.dur-l)/T.dur*100+'%';
+  set('#mini',`⏱ <b>${t}</b> <span class="text-xs text-zinc-500">${T.run?'· belajar':T.started?'· dijeda':'· siap'}</span>`);
+  set('#mini2',TO?`📝 Tryout: <b>${fmtT(toLeft())}</b>`:'');set('#totmr',TO?fmtT(toLeft()):'');
+  set('#tstat',T.run?`🟢 Sedang Belajar: <b>${esc(tName())}</b>`:T.started?`⏸ Dijeda — ${esc(tName())}`:'Pilih materi, lalu tekan START');
+  const s=$('#tsel');if(s)s.disabled=T.started;
+  const sig=T.run+'|'+T.started;if(sig!==T.sig){T.sig=sig;set('#tctl',ctl())}}
+const toLeft=()=>Math.max(0,Math.round((TO.end-Date.now())/1000));
+function tick(){if(T.run&&tLeft()<=0)finishSession();if(TO&&toLeft()<=0)submitTO(true);tUI()}
+
+/* ===== Layout & navigasi ===== */
+const prog=k=>{const a=MATERI.filter(x=>x.k==k),d=a.filter(x=>P[x.id]).length;return{n:a.length,d,p:Math.round(d/a.length*100)}};
+function updCounts(){[11,12].forEach(k=>{const p=prog(k),e=$('#pc'+k),s=$('#sp'+k);if(e)e.textContent=`${p.d}/${p.n} · ${p.p}%`;if(s)s.textContent=p.p+'%'})}
+function side(){const nv=(v,i,t)=>`<button class="nav ${view===v?'on':''}" onclick="go('${v}');$('#side').classList.add('hidden')">${i} ${t}</button>`;
+  $('#side').innerHTML=`<div class="flex items-center gap-3 mb-4 mt-8 md:mt-0">${LOGO}<div><div class="font-extrabold tracking-widest text-lg leading-none">STPN</div><div class="text-[11px] text-zinc-500">SMK to PTN</div></div></div>
+  <div class="card p-3 mb-3 text-sm"><div id="mini"></div><div id="mini2" class="text-xs text-blue-400 mt-1"></div></div>
+  ${nv('dash','🏠','Dashboard')}${nv('mat','📚','Materi')}${nv('bank','📝','Bank Soal')}${nv('to','🎯','Tryout UTBK')}
+  <div class="text-xs text-zinc-500 mt-4 px-3">Progress · Kelas 11: <b id="sp11" class="text-blue-400"></b> · Kelas 12: <b id="sp12" class="text-blue-400"></b></div>
+  <div class="mt-auto pt-4 flex flex-col gap-2"><button class="btn" onclick="expAll()">⬇ Export Semua Data</button><label class="btn cursor-pointer text-center">⬆ Import JSON<input type="file" accept=".json" class="hidden" onchange="impAll(event)"></label><button class="btn" onclick="sync(true)">🔄 Sync API</button><div id="sy" class="text-xs text-zinc-500">● Lokal (IndexedDB)</div></div>`;updCounts();tUI()}
+function go(v){if(v)view=v;side();$('#main').innerHTML='<div class="view max-w-5xl">'+{dash,mat,bank,to:tryout}[view]()+'</div>';T.sig=null;tUI();updCounts()}
+
+/* ===== Dashboard ===== */
+function streak(){const m={};SESS.forEach(l=>{m[l.date]=(m[l.date]||0)+l.sec});let d=new Date(),n=0;if((m[dk(d)]||0)<60)d.setDate(d.getDate()-1);while((m[dk(d)]||0)>=60){n++;d.setDate(d.getDate()-1)}return[n,Math.round((m[dk()]||0)/60),m]}
+function heat(m){const t=new Date();t.setHours(0,0,0,0);const W=26,s=new Date(t);s.setDate(t.getDate()-t.getDay()-(W-1)*7);let h='';
+  for(let i=0;i<W*7;i++){const d=new Date(s);d.setDate(s.getDate()+i);if(d>t){h+='<i style="background:transparent"></i>';continue}const mn=(m[dk(d)]||0)/60,c=mn<1?'#1f1f1f':mn<30?'#1e3a8a':mn<60?'#1d4ed8':mn<120?'#3B82F6':'#93c5fd';h+=`<i title="${dk(d)}: ${Math.round(mn)} menit" style="background:${c}"></i>`}
+  return`<div class="overflow-x-auto pb-1"><div class="heat">${h}</div></div><div class="flex items-center gap-1 text-[10px] text-zinc-500 mt-2">Sedikit ${['#1f1f1f','#1e3a8a','#1d4ed8','#3B82F6','#93c5fd'].map(c=>`<i class="inline-block w-3 h-3 rounded-sm" style="background:${c}"></i>`).join('')} Banyak</div>`}
+function dash(){const[st,today,m]=streak(),last=HIST[HIST.length-1],tot=Object.keys(m).length;
+  const pb=k=>{const p=prog(k);return`<div class="card p-5"><div class="flex justify-between items-end mb-3"><b>Kelas ${k}</b><span class="text-3xl font-bold text-blue-400">${p.p}%</span></div><div class="bar"><div style="width:${p.p}%"></div></div><div class="text-xs text-zinc-500 mt-2">${p.d} dari ${p.n} sub-bab selesai</div></div>`};
+  const grp=MATERI.map((x,i)=>[x,i]);let opts='<option value="">— Pilih materi yang dipelajari —</option>';
+  [11,12].forEach(k=>MAPEL.forEach(mp=>{opts+=`<optgroup label="Kelas ${k} · ${mp}">`+grp.filter(([x])=>x.k==k&&x.m==mp).map(([x,i])=>`<option value="${i}" ${String(T.sel)===String(i)?'selected':''}>${esc(x.b)}</option>`).join('')+'</optgroup>'}));
+  return`<div class="flex items-center gap-4 mb-6">${LOGO.replace('width="40" height="40"','width="64" height="64"')}<div><h1 class="text-3xl font-extrabold tracking-widest">STPN</h1><p class="text-zinc-500 text-sm">SMK to PTN · Kelas 11 & 12 Complete 🚀</p></div></div>
+  <div class="card p-6 mb-4"><div class="text-xs text-zinc-500 mb-1">STUDY TIMER · 1 JAM</div><div id="tdisp" class="text-6xl md:text-8xl font-extrabold text-blue-400 tracking-tight">60:00</div>
+  <div class="bar my-4"><div id="tbar" style="width:0"></div></div><div id="tstat" class="mb-3 text-sm"></div>
+  <select id="tsel" class="mb-4 md:w-[28rem]" onchange="tSel(this.value)">${opts}</select><div id="tctl" class="flex flex-wrap gap-2"></div></div>
+  <div class="grid md:grid-cols-2 gap-4 mb-4">${pb(11)}${pb(12)}</div>
+  <div class="grid md:grid-cols-3 gap-4 mb-4"><div class="card p-5"><div class="text-xs text-zinc-500">🔥 Streak Belajar</div><div class="text-3xl font-bold mt-1">${st} hari</div><div class="text-xs text-zinc-500 mt-1">Hari ini: ${today} menit</div></div>
+  <div class="card p-5"><div class="text-xs text-zinc-500">📅 Total Hari Belajar</div><div class="text-3xl font-bold mt-1">${tot}</div><div class="text-xs text-zinc-500 mt-1">${SESS.length} sesi</div></div>
+  <div class="card p-5"><div class="text-xs text-zinc-500">🎯 Skor Tryout Terakhir</div><div class="text-3xl font-bold mt-1">${last?last.score:'-'}</div><div class="text-xs text-zinc-500 mt-1">${last?`${last.correct}/${last.n} benar`:'Belum ada tryout'}</div></div></div>
+  <div class="card p-5"><div class="text-xs text-zinc-500 mb-3">Aktivitas belajar 26 minggu terakhir</div>${heat(m)}</div>`}
+
+/* ===== Materi (accordion Kelas → Mapel → Bab) ===== */
+function mat(){return`<h1 class="text-2xl font-bold mb-4">Materi · ${MATERI.length} Sub-bab</h1>`+[11,12].map(k=>`<details class="card mb-3" ${k==11?'open':''}><summary class="p-4 cursor-pointer font-semibold flex justify-between">📘 Kelas ${k}<span id="pc${k}" class="text-xs text-zinc-400 font-normal"></span></summary><div class="px-3 pb-3">`+
+  MAPEL.map(mp=>{const a=MATERI.map((x,i)=>[x,i]).filter(([x])=>x.k==k&&x.m==mp);return`<details class="mb-2 border border-[#262626] rounded-xl"><summary class="p-3 cursor-pointer text-sm font-medium text-blue-400 flex justify-between">${mp}<span class="text-xs text-zinc-500">${a.filter(([x])=>P[x.id]).length}/${a.length}</span></summary><div class="px-2 pb-2">`+
+  a.map(([x,i])=>`<details class="rounded-lg hover:bg-white/5"><summary class="flex items-center gap-3 p-2 cursor-pointer"><input type="checkbox" ${P[x.id]?'checked':''} onclick="event.stopPropagation()" onchange="chkP(${i},this)"><span class="flex-1 text-sm ${P[x.id]?'line-through text-zinc-500':''}">${esc(x.b)}</span></summary>
+  <div class="p-3 pt-1"><div class="text-xs text-zinc-500 mb-1">⚡ Rumus cepat</div><pre class="bg-black/40 p-3 rounded-lg whitespace-pre-wrap text-xs text-blue-200 mb-3 font-sans">${esc(x.r.split('; ').join('\n'))}</pre>
+  <div class="text-xs text-zinc-500 mb-1">📝 Catatan pribadi (auto-save)</div><textarea rows="3" oninput="note(${i},this)" placeholder="Tulis catatan…">${esc(NOTES[x.id]||'')}</textarea><div class="text-[11px] text-zinc-600 mt-1" id="ns${i}"></div></div></details>`).join('')+'</div></details>'}).join('')+'</div></details>').join('')}
+async function chkP(i,el){const id=MATERI[i].id;if(el.checked){P[id]=true;await put('prog',id,true)}else{delete P[id];await del('prog',id)}el.nextElementSibling.classList.toggle('line-through',el.checked);el.nextElementSibling.classList.toggle('text-zinc-500',el.checked);updCounts()}
+const nt={};function note(i,el){clearTimeout(nt[i]);nt[i]=setTimeout(async()=>{const id=MATERI[i].id;NOTES[id]=el.value;await put('notes',id,el.value);const s=$('#ns'+i);if(s)s.textContent='✓ Tersimpan '+new Date().toLocaleTimeString('id-ID')},500)}
+
+/* ===== Bank Soal ===== */
+const babOpts=(m,k,s)=>MATERI.filter(x=>x.m==m&&x.k==k).map(x=>`<option ${x.b==s?'selected':''}>${esc(x.b)}</option>`).join('');
+const sel=(id,a,v,ex='')=>`<select id="${id}" ${ex}>${a.map(x=>`<option ${x==v?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
+function setBF(f,v){BF[f]=v;if(f!='b')BF.b='';go()}
+function bank(){const tabs=`<div class="flex gap-2 mb-5"><button class="btn ${bankTab=='list'?'pri':''}" onclick="bankTab='list';editId=null;IMG=null;go()">Daftar Soal (Semua)</button><button class="btn ${bankTab=='add'?'pri':''}" onclick="newQ()">${editId?'Edit Soal':'Tambah Soal Baru'}</button></div>`;
+  if(bankTab=='add'){const x=editId?CQ.find(z=>z.id==editId):{m:MAPEL[0],k:11,b:'',q:'',o:['','','','',''],a:0,e:''};
+    return`<h1 class="text-2xl font-bold mb-4">Bank Soal</h1>${tabs}<div class="card p-5 max-w-3xl">
+    <div class="grid md:grid-cols-3 gap-3"><div><label class="k">Mapel</label>${sel('f-m',MAPEL,x.m,'onchange="refBab()"')}</div><div><label class="k">Kelas</label>${sel('f-k',[11,12],x.k,'onchange="refBab()"')}</div><div><label class="k">Bab</label><select id="f-b">${babOpts(x.m,x.k,x.b)}</select></div></div>
+    <label class="k">Soal (teks biasa / LaTeX sederhana: x^2, H_2O, \\frac{a}{b}, \\sqrt{x}, **tebal**)</label><textarea id="f-q" rows="4">${esc(x.q)}</textarea>
+    ${[0,1,2,3,4].map(i=>`<label class="k">Pilihan ${L[i]}</label><input id="f-o${i}" value="${esc(x.o[i]||'')}">`).join('')}
+    <label class="k">Jawaban Benar</label>${sel('f-a',L.split(''),L[x.a])}
+    <label class="k">Pembahasan</label><textarea id="f-e" rows="3">${esc(x.e)}</textarea>
+    <label class="k">Gambar Soal (opsional, disimpan sebagai base64)</label><input type="file" accept="image/*" onchange="readImg(this)"><div id="prev" class="mt-2">${IMG?`<img src="${IMG}" class="max-h-40 rounded"> <button class="btn mt-2" onclick="IMG=null;$('#prev').innerHTML=''">Hapus gambar</button>`:''}</div>
+    <div class="mt-5 flex gap-2"><button class="btn pri" onclick="saveQ()">💾 Simpan</button><button class="btn" onclick="bankTab='list';editId=null;IMG=null;go()">Batal</button></div></div>`}
+  const list=CQ.filter(x=>(!BF.m||x.m==BF.m)&&(!BF.k||x.k==BF.k)&&(!BF.b||x.b==BF.b)),bs=MATERI.filter(x=>(!BF.m||x.m==BF.m)&&(!BF.k||x.k==BF.k));
+  return`<h1 class="text-2xl font-bold mb-4">Bank Soal</h1>${tabs}<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+  <select onchange="setBF('m',this.value)"><option value="">Semua mapel</option>${MAPEL.map(m=>`<option ${m==BF.m?'selected':''}>${m}</option>`).join('')}</select>
+  <select onchange="setBF('k',this.value)"><option value="">Semua kelas</option>${[11,12].map(k=>`<option value="${k}" ${k==BF.k?'selected':''}>Kelas ${k}</option>`).join('')}</select>
+  <select class="col-span-2" onchange="setBF('b',this.value)"><option value="">Semua bab</option>${bs.map(x=>`<option ${x.b==BF.b?'selected':''}>${esc(x.b)}</option>`).join('')}</select></div>
+  <div class="flex flex-wrap gap-2 mb-4 items-center"><button class="btn" onclick="expQ()">⬇ Export Bank Soal</button><label class="btn cursor-pointer">⬆ Import Bank Soal<input type="file" accept=".json" class="hidden" onchange="impQ(event)"></label><span class="text-xs text-zinc-500">${list.length} dari ${CQ.length} soal custom</span></div>
+  ${list.length?list.map(x=>`<div class="card p-4 mb-3"><div class="text-xs text-zinc-500 mb-1">${esc(x.m)} · Kelas ${x.k} · ${esc(x.b)}</div><div>${fmt(x.q)}</div>${x.img?`<img src="${x.img}" class="my-2 max-h-60 rounded">`:''}
+  <div class="grid md:grid-cols-2 gap-1 mt-2 text-sm">${x.o.map((o,i)=>`<div class="${i==x.a?'text-green-400 font-semibold':''}">${L[i]}. ${fmt(o)}</div>`).join('')}</div>
+  <details class="mt-2 text-sm"><summary class="cursor-pointer text-blue-400">Pembahasan</summary><div class="mt-1 text-zinc-400">${fmt(x.e)||'-'}</div></details>
+  <div class="mt-3 flex gap-2"><button class="btn" onclick="editQ('${x.id}')">✏️ Edit</button><button class="btn" onclick="delQ('${x.id}')">🗑 Hapus</button></div></div>`).join(''):`<div class="card p-6 text-zinc-500 text-sm">Belum ada soal custom yang cocok. Tambahkan lewat tab "Tambah Soal Baru". Soal default (otomatis) tetap dipakai di Tryout.</div>`}`}
+function newQ(){bankTab='add';editId=null;IMG=null;go()}
+function editQ(id){editId=id;IMG=CQ.find(x=>x.id==id).img||null;bankTab='add';go()}
+function refBab(){$('#f-b').innerHTML=babOpts($('#f-m').value,+$('#f-k').value)}
+function readImg(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,900/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);IMG=c.toDataURL('image/jpeg',.82);$('#prev').innerHTML=`<img src="${IMG}" class="max-h-40 rounded">`};im.src=r.result};r.readAsDataURL(f)}
+async function saveQ(){const o=[0,1,2,3,4].map(i=>$('#f-o'+i).value.trim()),q=$('#f-q').value.trim();
+  if(!q||o.some(x=>!x))return toast('Soal dan pilihan A–E wajib diisi');
+  const x={id:editId||'q'+Date.now(),m:$('#f-m').value,k:+$('#f-k').value,b:$('#f-b').value,q,o,a:L.indexOf($('#f-a').value),e:$('#f-e').value.trim(),img:IMG};
+  await put('q',x.id,x);const i=CQ.findIndex(z=>z.id==x.id);i<0?CQ.push(x):CQ[i]=x;bankTab='list';editId=null;IMG=null;toast('Soal tersimpan');go()}
+async function delQ(id){if(!confirm('Hapus soal ini?'))return;await del('q',id);CQ=CQ.filter(x=>x.id!=id);go()}
+function expQ(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(CQ,null,2)],{type:'application/json'}));a.download='stpn-bank-soal.json';a.click()}
+function impQ(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const j=JSON.parse(r.result);if(!Array.isArray(j))throw 0;let n=0;for(const x of j){if(!x.q||!Array.isArray(x.o)||x.o.length<2||typeof x.a!=='number')continue;x.id=x.id||'q'+Date.now()+n;await put('q',x.id,x);const i=CQ.findIndex(z=>z.id==x.id);i<0?CQ.push(x):CQ[i]=x;n++}toast(`${n} soal diimpor`);go()}catch(err){toast('File JSON tidak valid')}};r.readAsText(f);e.target.value=''}
+
+/* ===== Tryout ===== */
+function tryout(){if(TO)return toRun();if(RES)return resView(RES);
+  return`<h1 class="text-2xl font-bold mb-1">Tryout UTBK</h1><p class="text-zinc-500 text-sm mb-5">Soal diacak dari Bank Soal custom (${CQ.length}) + soal default otomatis.</p>
+  <div class="card p-5 max-w-md mb-6"><label class="k" style="margin-top:0">Jumlah soal</label><select id="tn"><option value="50">50 soal · 90 menit</option><option value="75">75 soal · 135 menit</option><option value="100">100 soal · 180 menit</option></select>
+  <label class="k">Sumber soal</label><select id="ts"><option value="all">Semua Soal</option><option value="mat">Hanya Matematika</option><option value="k12">Hanya Kelas 12</option><option value="custom">Hanya Soal Custom</option></select><button class="btn pri mt-4" onclick="startTO()">Mulai Tryout</button></div>
+  <h3 class="font-semibold mb-2">Riwayat Tryout</h3>${HIST.length?[...HIST].reverse().map(h=>`<div class="card p-3 mb-2 flex justify-between items-center text-sm"><span>${new Date(h.date).toLocaleString('id-ID')} · ${h.n} soal</span><span>${h.correct} benar · <b class="text-blue-400">${h.score}</b> <button class="btn ml-2" onclick="showRes('${h.id}')">Lihat</button></span></div>`).join(''):'<div class="text-zinc-500 text-sm">Belum ada riwayat.</div>'}`}
+function startTO(){let n=+$('#tn').value,src=$('#ts').value,dur={50:90,75:135,100:180}[n];
+  if(src=='custom'){if(!CQ.length)return toast('Belum ada soal custom');if(CQ.length<n){n=CQ.length;dur=Math.max(1,Math.round(n*1.8));toast(`Soal custom hanya ${n}, tryout disesuaikan`)}}
+  const ok=src=='mat'?x=>x.m.startsWith('Matematika'):src=='k12'?x=>x.k==12:()=>true;let qs=shuf(CQ.filter(ok)).slice(0,n);
+  if(src!='custom'){const seen=new Set(qs.map(x=>x.q));let t=0;while(qs.length<n&&t++<20000){const x=genQ();if(ok(x)&&!seen.has(x.q)){seen.add(x.q);qs.push(x)}}while(qs.length<n){let x;do{x=genQ()}while(!ok(x));qs.push(x)}}
+  TO={qs:shuf(qs),ans:Array(n).fill(null),flag:Array(n).fill(false),cur:0,n,dur,end:Date.now()+dur*60000};RES=null;go('to')}
+function toRun(){const i=TO.cur,q=TO.qs[i];
+  return`<div class="flex flex-col lg:flex-row gap-4"><div class="flex-1 card p-5"><div class="flex justify-between text-xs text-zinc-500 mb-3"><span>Soal ${i+1}/${TO.n} · ${esc(q.m)} · ${esc(q.b)}</span>${TO.flag[i]?'<span class="text-yellow-400">● Ragu-ragu</span>':''}</div>
+  <div class="leading-relaxed">${fmt(q.q)}</div>${q.img?`<img src="${q.img}" class="my-3 max-h-64 rounded">`:''}
+  ${q.o.map((o,j)=>`<button class="opt ${TO.ans[i]===j?'sel':''}" onclick="TO.ans[TO.cur]=${j};go()"><b>${L[j]}.</b> ${fmt(o)}</button>`).join('')}
+  <div class="flex flex-wrap gap-2 mt-5"><button class="btn" ${i?'':'disabled'} onclick="navQ(${i-1})">← Sebelumnya</button><button class="btn" onclick="TO.flag[TO.cur]=!TO.flag[TO.cur];go()">🚩 Tandai Ragu-ragu</button><button class="btn" onclick="TO.ans[TO.cur]=null;go()">Kosongkan</button><button class="btn pri" ${i<TO.n-1?'':'disabled'} onclick="navQ(${i+1})">Berikutnya →</button></div></div>
+  <div class="lg:w-72 card p-4 h-fit"><div class="text-xs text-zinc-500">Sisa waktu</div><div id="totmr" class="text-3xl font-bold text-blue-400 mb-3"></div>
+  <div class="grid grid-cols-5 gap-1.5">${TO.ans.map((a,j)=>`<button class="nb ${TO.flag[j]?'f':a!==null?'a':''} ${j==i?'cur':''}" onclick="navQ(${j})">${j+1}</button>`).join('')}</div>
+  <div class="text-[11px] text-zinc-500 mt-3">Abu = belum · <span class="text-blue-400">Biru</span> = dijawab · <span class="text-yellow-400">Kuning</span> = ragu-ragu</div><button class="btn pri w-full mt-4" onclick="submitTO()">Selesai</button></div></div>`}
+function navQ(i){if(i>=0&&i<TO.n){TO.cur=i;go()}}
+async function submitTO(auto){const empty=TO.ans.filter(a=>a===null).length;if(!auto&&!confirm(empty?`Masih ${empty} soal kosong. Selesaikan tryout?`:'Selesaikan tryout?'))return;
+  const c=TO.qs.filter((q,i)=>TO.ans[i]===q.a).length,r={id:'t'+Date.now(),date:Date.now(),n:TO.n,correct:c,wrong:TO.n-c-empty,empty,score:Math.round(c/TO.n*1000)/10,dur:TO.dur,qs:TO.qs,ans:TO.ans};
+  HIST.push(r);TO=null;RES=r;await put('to',r.id,r);if(auto)beep();go('to')}
+function showRes(id){RES=HIST.find(h=>h.id==id);go('to')}
+function resView(r){return`<div class="flex justify-between items-center mb-4"><h1 class="text-2xl font-bold">Hasil Tryout</h1><button class="btn" onclick="RES=null;go()">← Kembali</button></div>
+  <div class="card p-6 mb-5"><div class="text-xs text-zinc-500">NILAI</div><div class="text-6xl font-extrabold text-blue-400">${r.score}</div><div class="text-sm mt-2 text-zinc-400"><span class="text-green-400">${r.correct} benar</span> · <span class="text-red-400">${r.wrong} salah</span> · ${r.empty} kosong · dari ${r.n} soal</div></div>
+  ${r.qs.map((q,i)=>{const a=r.ans[i],ok=a===q.a;return`<div class="card p-4 mb-3"><div class="text-xs mb-1 ${ok?'text-green-400':a===null?'text-zinc-500':'text-red-400'}">${i+1}. ${esc(q.m)} · ${esc(q.b)} · ${ok?'Benar':a===null?'Kosong':'Salah'}</div><div>${fmt(q.q)}</div>${q.img?`<img src="${q.img}" class="my-2 max-h-52 rounded">`:''}
+  ${q.o.map((o,j)=>`<div class="opt ${j==q.a?'ok':j===a?'bad':''}"><b>${L[j]}.</b> ${fmt(o)}</div>`).join('')}<div class="mt-3 text-sm bg-black/40 p-3 rounded-lg"><b class="text-blue-400">Pembahasan:</b> ${fmt(q.e)||'-'}</div></div>`}).join('')}`}
+
+/* ===== Init ===== */
+(async()=>{
+  try{
+    await Promise.all([DB.prog.iterate((v,k)=>{P[k]=v}),DB.q.iterate(v=>{CQ.push(v)}),DB.to.iterate(v=>{HIST.push(v)}),DB.ses.iterate(v=>{SESS.push(v)}),DB.notes.iterate((v,k)=>{NOTES[k]=v})]);
+    HIST.sort((a,b)=>a.date-b.date);
+    const s=await DB.app.getItem('timer');if(s)Object.assign(T,{left:s.left,run:s.run,end:s.end,started:s.started,sel:s.sel===undefined?'':s.sel});
+  }catch(e){toast('IndexedDB tidak tersedia — data tidak akan persisten')}
+  go('dash');if(T.run&&tLeft()<=0)finishSession(true);setInterval(tick,250);sync();
+})();
+</script>
+</body>
+</html>
