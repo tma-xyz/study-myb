@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>STPN · SMK to PTN</title>
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
@@ -30,13 +30,19 @@ details>summary{list-style:none}details>summary::-webkit-details-marker{display:
 .view{animation:fi .25s ease}@keyframes fi{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @keyframes sh{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}.shake{animation:sh .3s;border-color:#ef4444!important}
 sup,sub{font-size:.7em}
+html{-webkit-text-size-adjust:100%}body{overflow-x:hidden}
+#top{padding-top:calc(.5rem + env(safe-area-inset-top))}
+.btn{min-height:38px}
+.tb{background:#1f1f1f;border:1px solid #2e2e2e;border-radius:7px;padding:3px 9px;font-size:13px;min-height:32px}
+@media(max-width:767px){input,select,textarea{font-size:16px}input[type=checkbox]{width:20px;height:20px}}
 </style>
 </head>
 <body>
-<button class="md:hidden fixed top-3 left-3 z-30 btn" onclick="$('#side').classList.toggle('hidden')">☰</button>
-<div class="md:flex h-screen">
-  <aside id="side" class="hidden md:flex flex-col fixed md:static inset-y-0 left-0 z-20 w-72 shrink-0 p-4 bg-[#0A0A0A] border-r border-[#262626]"></aside>
-  <main id="main" class="flex-1 overflow-y-auto p-5 pt-16 md:p-8 md:pt-8"></main>
+<div id="top" class="md:hidden sticky top-0 z-30 flex items-center gap-3 px-3 pb-2 bg-[#0A0A0A]/95 border-b border-[#262626] backdrop-blur"><button class="btn" onclick="drawer(1)">☰</button><b class="tracking-widest">STPN</b><span id="mini3" class="ml-auto text-sm text-blue-400"></span></div>
+<div class="md:flex md:h-[100dvh]">
+  <div id="bk" class="hidden fixed inset-0 z-40 bg-black/60 md:hidden" onclick="drawer(0)"></div>
+  <aside id="side" class="-translate-x-full md:translate-x-0 transition-transform duration-200 fixed md:static inset-y-0 left-0 z-50 w-72 max-w-[85vw] shrink-0 p-4 bg-[#0A0A0A] border-r border-[#262626] flex flex-col overflow-y-auto"></aside>
+  <main id="main" class="flex-1 min-w-0 md:overflow-y-auto p-4 md:p-8"></main>
 </div>
 <div id="modal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"><div id="mbox" class="card p-6 max-w-sm w-full text-center"></div></div>
 <div id="toast" class="hidden fixed bottom-4 right-4 z-50 card px-4 py-2 text-sm"></div>
@@ -117,15 +123,18 @@ Relativitas Khusus|γ=1/√(1-v²/c²); t=γt₀; L=L₀/γ; E=mc²; penjumlahan
 const MATERI=[];let _k,_m;RAW.split('\n').forEach(l=>{if(l[0]=='#'){[_k,_m]=l.slice(1).split('|');_k=+_k}else{const i=l.indexOf('|'),b=l.slice(0,i).trim();MATERI.push({k:_k,m:_m,b,r:l.slice(i+1).trim(),id:_k+'|'+b})}});
 
 /* ===== Database (IndexedDB via localForage) ===== */
-const mk=n=>localforage.createInstance({name:'stpn',storeName:n});
+const mk=n=>localforage.createInstance({name:'stpn_'+n,storeName:'data'});
 const DB={prog:mk('progressMateri'),q:mk('customQuestions'),to:mk('tryoutHistory'),ses:mk('studySessions'),notes:mk('notes'),app:mk('appState')};
 const $=s=>document.querySelector(s);
-let P={},CQ=[],HIST=[],SESS=[],NOTES={},view='dash',bankTab='list',editId=null,IMG=null,BF={m:'',k:'',b:''},TO=null,RES=null,AC=null;
+let P={},CQ=[],HIST=[],SESS=[],NOTES={},view='dash',bankTab='list',editId=null,IMG=null,BF={m:'',k:'',b:''},TO=null,RES=null,AC=null,OPEN={},LF=null,PR=null;
 const T={dur:3600,left:3600,run:false,end:0,started:false,sel:'',sig:null};
 let sy;
 function stat(t){const e=$('#sy');if(e)e.textContent=t}
 function sync(manual){clearTimeout(sy);sy=setTimeout(async()=>{try{const r=await fetch('http://localhost:3000/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(snap()),signal:AbortSignal.timeout(1500)});if(!r.ok)throw 0;stat('✓ Tersinkron ke API');if(manual)toast('Sinkron ke API berhasil')}catch(e){stat('● Lokal (IndexedDB)');if(manual)toast('Backend tidak aktif — data tetap aman di IndexedDB')}},manual?0:1500)}
-const put=async(s,k,v)=>{await DB[s].setItem(k,v);sync()},del=async(s,k)=>{await DB[s].removeItem(k);sync()};
+const mirror=()=>{try{localStorage.setItem('stpn_mirror',JSON.stringify({P,NOTES,SESS,CQ:CQ.map(x=>({...x,img:null}))}))}catch(e){}};
+const savedAt=()=>{const e=$('#sv');if(e)e.textContent='💾 Tersimpan otomatis '+new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
+const put=async(s,k,v)=>{try{await DB[s].setItem(k,v)}catch(e){toast('Gagal menyimpan ke IndexedDB')}mirror();savedAt();sync()};
+const del=async(s,k)=>{try{await DB[s].removeItem(k)}catch(e){}mirror();savedAt();sync()};
 const snap=()=>({app:'STPN',version:2,progressMateri:P,customQuestions:CQ,tryoutHistory:HIST,studySessions:SESS,notes:NOTES});
 function expAll(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(snap(),null,2)],{type:'application/json'}));a.download='stpn-backup-'+dk()+'.json';a.click()}
 function impAll(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const j=JSON.parse(r.result);if(j.app!=='STPN')throw 0;
@@ -148,7 +157,7 @@ function beep(){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)()
 const fm=(k,p)=>MATERI.find(x=>x.k==k&&x.b.startsWith(p));
 function mkQ(k,p,q,c,w,e){const x=fm(k,p),o=shuf([c,...[...new Set(w)].filter(z=>z!==c).slice(0,4)]);return{m:x.m,k,b:x.b,q,o,a:o.indexOf(c),e}}
 function mkN(k,p,q,c,e,u='',s){const r=x=>Math.round(x*100)/100;c=r(c);s=s||(Math.abs(c)>=20?Math.round(Math.abs(c)/10):1);
-  const w=shuf([c+s,c-s,c+2*s,c-2*s,c+3*s,c-3*s,c*2,c/2].map(r).filter(x=>x!==c&&isFinite(x)&&(c<=0||x>=0)));return mkQ(k,p,q,c+u,w.map(x=>x+u),e)}
+  const w=shuf([c+s,c-s,c+2*s,c-2*s,c+3*s,c-3*s,c*2,c/2].map(r).filter(x=>x!==c&&isFinite(x)&&(c<=0||x>=0)));return{...mkQ(k,p,q,c+u,w.map(x=>x+u),e),val:c}}
 const comb=(n,r)=>r==2?n*(n-1)/2:n*(n-1)*(n-2)/6,EP={Mg:-2.37,Zn:-.76,Fe:-.44,Cu:.34,Ag:.8};
 const G=[
 ()=>{const a=R(2,5),b=R(1,6),c=R(2,4),d=R(1,5),x=R(1,4),g=c*x+d;return mkN(11,'Fungsi Komposisi',`Diketahui f(x)=${a}x+${b} dan g(x)=${c}x+${d}. Nilai (f∘g)(${x}) adalah…`,a*g+b,`g(${x})=${g}; f(${g})=${a*g+b}.`)},
@@ -175,8 +184,20 @@ const G=[
 ()=>{const r=pick([4,10,20,25,50,100]),v=R(1,5)*10;return mkN(12,'Listrik Dinamis',`Sebuah resistor ${r} Ω dipasang pada tegangan ${v} V. Daya yang diserap adalah…`,v*v/r,`P = V²/R = ${v*v}/${r} = ${v*v/r} W.`,' W')},
 ()=>{const B=R(1,5),I=R(2,6),l=R(1,5);return mkN(12,'Medan Magnet',`Kawat sepanjang ${l} m dialiri arus ${I} A tegak lurus medan magnet ${B} T. Gaya Lorentz yang dialami kawat adalah…`,B*I*l,`F = B·I·L = ${B}·${I}·${l}.`,' N')},
 ()=>{const t=R(2,10),n=R(1,4),N0=16*R(1,8);return mkN(12,'Fisika Inti',`Waktu paruh suatu unsur ${t} hari. Mula-mula tersedia ${N0} gram. Setelah ${n*t} hari, massa yang tersisa adalah…`,N0/2**n,`Terjadi ${n} kali waktu paruh: ${N0}/2^${n} = ${N0/2**n} g.`,' g')}
+,
+()=>{const m=pick([1,2]),n=pick([1,2]);return mkN(11,'Laju Reaksi',`Reaksi A + B → C berorde ${m} terhadap A dan berorde ${n} terhadap B. Jika konsentrasi A dan B masing-masing dilipatkan 2, laju reaksi menjadi … kali semula`,2**(m+n),`Laju ∝ 2^${m}·2^${n} = ${2**(m+n)} kali.`)},
+()=>{const j=R(1,4);return mkN(11,'Laju Reaksi',`Setiap kenaikan suhu 10°C, laju reaksi menjadi 2 kali semula. Jika suhu dinaikkan ${10*j}°C, laju reaksi menjadi … kali semula`,2**j,`2^(${10*j}/10) = ${2**j} kali.`)},
+()=>{const m=pick([1,3]);return mkN(11,'Hidrolisis',`Larutan CH_3COONa 10^{-${m}} M (Ka CH_3COOH = 10^{-5}) memiliki pH sebesar…`,m==1?9:8,`[OH^-]=√(Kw/Ka·M) → pOH=${(9+m)/2}, pH=${14-(9+m)/2}.`)},
+()=>{const j=R(1,5);return mkN(11,'Sifat Koligatif',`Sebanyak ${18*j} gram glukosa (Mr=180) dilarutkan dalam 100 gram air (Kf=1,86 °C/m). Penurunan titik beku larutan adalah… °C`,1.86*j,`m=(${18*j}/180)/0,1=${j} molal; ΔTf=Kf·m=${(1.86*j).toFixed(2)}.`,'',.5)},
+()=>{const m=pick([1,3,5]);return mkN(11,'Asam Basa',`Larutan CH_3COOH 10^{-${m}} M (Ka=10^{-5}) memiliki pH…`,(5+m)/2,`[H^+]=√(Ka·M)=√(10^{-${5+m}}); pH=${(5+m)/2}.`)},
+()=>{const x=pick([[11,'Na',1],[12,'Mg',2],[13,'Al',3],[15,'P',5],[16,'S',6],[17,'Cl',7]]);return mkN(12,'Struktur Atom',`Unsur ${x[1]} memiliki nomor atom ${x[0]}. Jumlah elektron valensinya adalah…`,x[2],`Kulit terluar berisi ${x[2]} elektron (golongan ${x[2]}A).`)},
+()=>{const x=pick([['BF_3','trigonal planar'],['CH_4','tetrahedral'],['H_2O','bentuk V (bengkok)'],['NH_3','piramida trigonal'],['CO_2','linear']]),A=['trigonal planar','tetrahedral','bentuk V (bengkok)','piramida trigonal','linear'];return mkQ(12,'Ikatan Kimia',`Bentuk molekul ${x[0]} menurut teori VSEPR adalah…`,x[1],A.filter(a=>a!==x[1]),`Dari jumlah PEI dan PEB atom pusat, ${x[0]} berbentuk ${x[1]}.`)},
+()=>{const j=pick([1,2,4]);return mkN(12,'Elektrolisis',`Elektrolisis larutan CuSO_4 dengan muatan ${j} Faraday. Massa Cu (Ar=63,5) yang mengendap di katoda adalah… gram`,31.75*j,`Cu^{2+}+2e → Cu; mol e=${j}; massa=(${j}/2)·63,5=${31.75*j} g.`,'',10)},
+()=>{const x=pick([['Bilangan oktan menyatakan persentase … dalam bensin','isooktana',['n-heptana','etanol','benzena','metana'],'Oktan 100 = isooktana murni, oktan 0 = n-heptana.'],['Fraksi minyak bumi dengan titik didih paling tinggi adalah…','residu (aspal)',['LPG','bensin','kerosin','solar'],'Fraksi berat berantai panjang → titik didih tinggi.']]);return mkQ(11,'Minyak Bumi',x[0],x[1],x[2],x[3])},
+()=>{const x=pick([['Halogen dengan sifat oksidator paling kuat adalah…','F_2',['Cl_2','Br_2','I_2','At_2'],'Daya oksidasi halogen menurun dari F ke I.'],['Unsur periode ketiga yang bersifat amfoter adalah…','Al',['Na','Mg','Si','Cl'],'Al dan oksidanya bersifat amfoter.']]);return mkQ(12,'Kimia Unsur',x[0],x[1],x[2],x[3])}
 ];
-const genQ=()=>pick(G)();
+const genQ=()=>{const tm=pick(MAPEL);let x;for(let i=0;i<40;i++){x=pick(G)();if(x.m===tm)break}return x.val!==undefined&&Math.random()<.3?{m:x.m,k:x.k,b:x.b,q:x.q+' (isian — tulis angkanya saja)',t:'isian',ans:String(x.val),e:x.e}:x};
+
 
 /* ===== Timer belajar (state global) ===== */
 const tLeft=()=>T.run?Math.max(0,Math.round((T.end-Date.now())/1000)):T.left,tName=()=>T.sel===''?'-':MATERI[T.sel].b;
@@ -192,7 +213,7 @@ function finishSession(silent){logSession(T.dur);const n=tName();T.run=false;T.s
   modal(`<div class="text-5xl mb-3">🎉</div><h2 class="text-xl font-bold mb-1">Sesi Selesai!</h2><p class="text-zinc-400 mb-4">60 menit belajar <b>${esc(n)}</b> tersimpan untuk streak harianmu.</p><button class="btn pri" onclick="closeModal()">Lanjut</button>`);if(view==='dash')go();else tUI()}
 function ctl(){return(T.run?`<button class="btn pri" onclick="tPause()">⏸ PAUSE</button>`:`<button class="btn pri" onclick="tStart()">▶ ${T.started?'LANJUT':'START'}</button>`)+`<button class="btn" onclick="tReset()">↺ RESET</button>`+(T.started?`<button class="btn" style="color:#f87171" onclick="tStop()">■ SELESAI</button>`:'')}
 function tUI(){const l=tLeft(),t=fmtT(l),set=(s,h)=>{const e=$(s);if(e)e.innerHTML=h};
-  set('#tdisp',t);const b=$('#tbar');if(b)b.style.width=(T.dur-l)/T.dur*100+'%';
+  set('#tdisp',t);set('#mini3',TO?'📝 '+fmtT(toLeft()):'⏱ '+t);const b=$('#tbar');if(b)b.style.width=(T.dur-l)/T.dur*100+'%';
   set('#mini',`⏱ <b>${t}</b> <span class="text-xs text-zinc-500">${T.run?'· belajar':T.started?'· dijeda':'· siap'}</span>`);
   set('#mini2',TO?`📝 Tryout: <b>${fmtT(toLeft())}</b>`:'');set('#totmr',TO?fmtT(toLeft()):'');
   set('#tstat',T.run?`🟢 Sedang Belajar: <b>${esc(tName())}</b>`:T.started?`⏸ Dijeda — ${esc(tName())}`:'Pilih materi, lalu tekan START');
@@ -204,13 +225,16 @@ function tick(){if(T.run&&tLeft()<=0)finishSession();if(TO&&toLeft()<=0)submitTO
 /* ===== Layout & navigasi ===== */
 const prog=k=>{const a=MATERI.filter(x=>x.k==k),d=a.filter(x=>P[x.id]).length;return{n:a.length,d,p:Math.round(d/a.length*100)}};
 function updCounts(){[11,12].forEach(k=>{const p=prog(k),e=$('#pc'+k),s=$('#sp'+k);if(e)e.textContent=`${p.d}/${p.n} · ${p.p}%`;if(s)s.textContent=p.p+'%'})}
-function side(){const nv=(v,i,t)=>`<button class="nav ${view===v?'on':''}" onclick="go('${v}');$('#side').classList.add('hidden')">${i} ${t}</button>`;
-  $('#side').innerHTML=`<div class="flex items-center gap-3 mb-4 mt-8 md:mt-0">${LOGO}<div><div class="font-extrabold tracking-widest text-lg leading-none">STPN</div><div class="text-[11px] text-zinc-500">SMK to PTN</div></div></div>
+function drawer(o){$('#side').classList.toggle('-translate-x-full',!o);$('#bk').classList.toggle('hidden',!o)}
+function side(){const nv=(v,i,t)=>`<button class="nav ${view===v?'on':''}" onclick="go('${v}');drawer(0)">${i} ${t}</button>`;
+  $('#side').innerHTML=`<div class="flex items-center gap-3 mb-4">${LOGO}<div><div class="font-extrabold tracking-widest text-lg leading-none">STPN</div><div class="text-[11px] text-zinc-500">SMK to PTN</div></div></div>
   <div class="card p-3 mb-3 text-sm"><div id="mini"></div><div id="mini2" class="text-xs text-blue-400 mt-1"></div></div>
   ${nv('dash','🏠','Dashboard')}${nv('mat','📚','Materi')}${nv('bank','📝','Bank Soal')}${nv('to','🎯','Tryout UTBK')}
   <div class="text-xs text-zinc-500 mt-4 px-3">Progress · Kelas 11: <b id="sp11" class="text-blue-400"></b> · Kelas 12: <b id="sp12" class="text-blue-400"></b></div>
-  <div class="mt-auto pt-4 flex flex-col gap-2"><button class="btn" onclick="expAll()">⬇ Export Semua Data</button><label class="btn cursor-pointer text-center">⬆ Import JSON<input type="file" accept=".json" class="hidden" onchange="impAll(event)"></label><button class="btn" onclick="sync(true)">🔄 Sync API</button><div id="sy" class="text-xs text-zinc-500">● Lokal (IndexedDB)</div></div>`;updCounts();tUI()}
-function go(v){if(v)view=v;side();$('#main').innerHTML='<div class="view max-w-5xl">'+{dash,mat,bank,to:tryout}[view]()+'</div>';T.sig=null;tUI();updCounts()}
+  <div class="mt-auto pt-4 flex flex-col gap-2"><button class="btn" onclick="expAll()">⬇ Export Semua Data</button><label class="btn cursor-pointer text-center">⬆ Import JSON<input type="file" accept=".json" class="hidden" onchange="impAll(event)"></label><button class="btn" onclick="sync(true)">🔄 Sync API</button><div id="sv" class="text-xs text-green-500">💾 Tersimpan otomatis</div><div id="sy" class="text-xs text-zinc-500">● Lokal (IndexedDB)</div></div>`;updCounts();tUI()}
+const saveUI=()=>DB.app.setItem('ui',{view,bankTab:bankTab=='add'?'list':bankTab,BF,OPEN}).catch(()=>{});
+function go(v){const ch=v&&v!==view;if(v)view=v;side();$('#main').innerHTML='<div class="view max-w-5xl">'+{dash,mat,bank,to:tryout}[view]()+'</div>';T.sig=null;tUI();updCounts();if(ch){scrollTo(0,0);$('#main').scrollTop=0}
+  saveUI();mirror();if(TO)DB.app.setItem('to',TO).catch(()=>{});else DB.app.removeItem('to').catch(()=>{})}
 
 /* ===== Dashboard ===== */
 function streak(){const m={};SESS.forEach(l=>{m[l.date]=(m[l.date]||0)+l.sec});let d=new Date(),n=0;if((m[dk(d)]||0)<60)d.setDate(d.getDate()-1);while((m[dk(d)]||0)>=60){n++;d.setDate(d.getDate()-1)}return[n,Math.round((m[dk()]||0)/60),m]}
@@ -222,7 +246,7 @@ function dash(){const[st,today,m]=streak(),last=HIST[HIST.length-1],tot=Object.k
   const grp=MATERI.map((x,i)=>[x,i]);let opts='<option value="">— Pilih materi yang dipelajari —</option>';
   [11,12].forEach(k=>MAPEL.forEach(mp=>{opts+=`<optgroup label="Kelas ${k} · ${mp}">`+grp.filter(([x])=>x.k==k&&x.m==mp).map(([x,i])=>`<option value="${i}" ${String(T.sel)===String(i)?'selected':''}>${esc(x.b)}</option>`).join('')+'</optgroup>'}));
   return`<div class="flex items-center gap-4 mb-6">${LOGO.replace('width="40" height="40"','width="64" height="64"')}<div><h1 class="text-3xl font-extrabold tracking-widest">STPN</h1><p class="text-zinc-500 text-sm">SMK to PTN · Kelas 11 & 12 Complete 🚀</p></div></div>
-  <div class="card p-6 mb-4"><div class="text-xs text-zinc-500 mb-1">STUDY TIMER · 1 JAM</div><div id="tdisp" class="text-6xl md:text-8xl font-extrabold text-blue-400 tracking-tight">60:00</div>
+  <div class="card p-6 mb-4"><div class="text-xs text-zinc-500 mb-1">STUDY TIMER · 1 JAM</div><div id="tdisp" class="text-5xl sm:text-6xl md:text-8xl font-extrabold text-blue-400 tracking-tight">60:00</div>
   <div class="bar my-4"><div id="tbar" style="width:0"></div></div><div id="tstat" class="mb-3 text-sm"></div>
   <select id="tsel" class="mb-4 md:w-[28rem]" onchange="tSel(this.value)">${opts}</select><div id="tctl" class="flex flex-wrap gap-2"></div></div>
   <div class="grid md:grid-cols-2 gap-4 mb-4">${pb(11)}${pb(12)}</div>
@@ -231,88 +255,120 @@ function dash(){const[st,today,m]=streak(),last=HIST[HIST.length-1],tot=Object.k
   <div class="card p-5"><div class="text-xs text-zinc-500">🎯 Skor Tryout Terakhir</div><div class="text-3xl font-bold mt-1">${last?last.score:'-'}</div><div class="text-xs text-zinc-500 mt-1">${last?`${last.correct}/${last.n} benar`:'Belum ada tryout'}</div></div></div>
   <div class="card p-5"><div class="text-xs text-zinc-500 mb-3">Aktivitas belajar 26 minggu terakhir</div>${heat(m)}</div>`}
 
-/* ===== Materi (accordion Kelas → Mapel → Bab) ===== */
-function mat(){return`<h1 class="text-2xl font-bold mb-4">Materi · ${MATERI.length} Sub-bab</h1>`+[11,12].map(k=>`<details class="card mb-3" ${k==11?'open':''}><summary class="p-4 cursor-pointer font-semibold flex justify-between">📘 Kelas ${k}<span id="pc${k}" class="text-xs text-zinc-400 font-normal"></span></summary><div class="px-3 pb-3">`+
-  MAPEL.map(mp=>{const a=MATERI.map((x,i)=>[x,i]).filter(([x])=>x.k==k&&x.m==mp);return`<details class="mb-2 border border-[#262626] rounded-xl"><summary class="p-3 cursor-pointer text-sm font-medium text-blue-400 flex justify-between">${mp}<span class="text-xs text-zinc-500">${a.filter(([x])=>P[x.id]).length}/${a.length}</span></summary><div class="px-2 pb-2">`+
-  a.map(([x,i])=>`<details class="rounded-lg hover:bg-white/5"><summary class="flex items-center gap-3 p-2 cursor-pointer"><input type="checkbox" ${P[x.id]?'checked':''} onclick="event.stopPropagation()" onchange="chkP(${i},this)"><span class="flex-1 text-sm ${P[x.id]?'line-through text-zinc-500':''}">${esc(x.b)}</span></summary>
-  <div class="p-3 pt-1"><div class="text-xs text-zinc-500 mb-1">⚡ Rumus cepat</div><pre class="bg-black/40 p-3 rounded-lg whitespace-pre-wrap text-xs text-blue-200 mb-3 font-sans">${esc(x.r.split('; ').join('\n'))}</pre>
+/* ===== Materi (accordion Kelas → Mapel → Bab, state buka/tutup tersimpan) ===== */
+const op=(k,d)=>(OPEN[k]===undefined?d:OPEN[k])?'open':'';
+function mat(){return`<h1 class="text-xl md:text-2xl font-bold mb-4">Materi · ${MATERI.length} Sub-bab</h1>`+[11,12].map(k=>`<details class="card mb-3" data-key="k${k}" ${op('k'+k,k==11)}><summary class="p-4 cursor-pointer font-semibold flex justify-between gap-2">📘 Kelas ${k}<span id="pc${k}" class="text-xs text-zinc-400 font-normal"></span></summary><div class="px-2 md:px-3 pb-3">`+
+  MAPEL.map(mp=>{const a=MATERI.map((x,i)=>[x,i]).filter(([x])=>x.k==k&&x.m==mp);return`<details class="mb-2 border border-[#262626] rounded-xl" data-key="k${k}|${esc(mp)}" ${op('k'+k+'|'+mp,false)}><summary class="p-3 cursor-pointer text-sm font-medium text-blue-400 flex justify-between gap-2">${mp}<span class="text-xs text-zinc-500">${a.length} bab</span></summary><div class="px-1 md:px-2 pb-2">`+
+  a.map(([x,i])=>`<details class="rounded-lg hover:bg-white/5" data-key="${esc(x.id)}" ${op(x.id,false)}><summary class="flex items-center gap-3 p-2 cursor-pointer"><input type="checkbox" ${P[x.id]?'checked':''} onclick="event.stopPropagation()" onchange="chkP(${i},this)"><span class="flex-1 min-w-0 text-sm ${P[x.id]?'line-through text-zinc-500':''}">${esc(x.b)}</span></summary>
+  <div class="p-2 md:p-3 pt-1"><div class="text-xs text-zinc-500 mb-1">⚡ Rumus cepat</div><pre class="bg-black/40 p-3 rounded-lg whitespace-pre-wrap text-xs text-blue-200 mb-3 font-sans">${esc(x.r.split('; ').join('\n'))}</pre>
   <div class="text-xs text-zinc-500 mb-1">📝 Catatan pribadi (auto-save)</div><textarea rows="3" oninput="note(${i},this)" placeholder="Tulis catatan…">${esc(NOTES[x.id]||'')}</textarea><div class="text-[11px] text-zinc-600 mt-1" id="ns${i}"></div></div></details>`).join('')+'</div></details>'}).join('')+'</div></details>').join('')}
-async function chkP(i,el){const id=MATERI[i].id;if(el.checked){P[id]=true;await put('prog',id,true)}else{delete P[id];await del('prog',id)}el.nextElementSibling.classList.toggle('line-through',el.checked);el.nextElementSibling.classList.toggle('text-zinc-500',el.checked);updCounts()}
-const nt={};function note(i,el){clearTimeout(nt[i]);nt[i]=setTimeout(async()=>{const id=MATERI[i].id;NOTES[id]=el.value;await put('notes',id,el.value);const s=$('#ns'+i);if(s)s.textContent='✓ Tersimpan '+new Date().toLocaleTimeString('id-ID')},500)}
+async function chkP(i,el){const id=MATERI[i].id;if(el.checked)P[id]=true;else delete P[id];mirror();el.nextElementSibling.classList.toggle('line-through',el.checked);el.nextElementSibling.classList.toggle('text-zinc-500',el.checked);updCounts();if(el.checked)await put('prog',id,true);else await del('prog',id)}
+const nt={};function note(i,el){const id=MATERI[i].id;NOTES[id]=el.value;mirror();clearTimeout(nt[i]);nt[i]=setTimeout(async()=>{await put('notes',id,el.value);const s=$('#ns'+i);if(s)s.textContent='✓ Tersimpan '+new Date().toLocaleTimeString('id-ID')},400)}
 
 /* ===== Bank Soal ===== */
+const isIsi=q=>q.t==='isian',filled=a=>a!==null&&a!==undefined&&a!=='',nrm=s=>String(s).toLowerCase().replace(/\s+/g,'').replace(/,/g,'.');
+function isOk(q,a){if(!filled(a))return false;if(!isIsi(q))return a===q.a;const u=nrm(a);return String(q.ans).split(';').some(k=>{k=nrm(k);if(!k)return false;if(u===k)return true;const num=/^[-+]?\d*\.?\d+(e[-+]?\d+)?$/,x=parseFloat(u),y=parseFloat(k);return num.test(u)&&num.test(k)&&Math.abs(x-y)<=1e-6*Math.max(1,Math.abs(y))})}
 const babOpts=(m,k,s)=>MATERI.filter(x=>x.m==m&&x.k==k).map(x=>`<option ${x.b==s?'selected':''}>${esc(x.b)}</option>`).join('');
 const sel=(id,a,v,ex='')=>`<select id="${id}" ${ex}>${a.map(x=>`<option ${x==v?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
-function setBF(f,v){BF[f]=v;if(f!='b')BF.b='';go()}
-function bank(){const tabs=`<div class="flex gap-2 mb-5"><button class="btn ${bankTab=='list'?'pri':''}" onclick="bankTab='list';editId=null;IMG=null;go()">Daftar Soal (Semua)</button><button class="btn ${bankTab=='add'?'pri':''}" onclick="newQ()">${editId?'Edit Soal':'Tambah Soal Baru'}</button></div>`;
-  if(bankTab=='add'){const x=editId?CQ.find(z=>z.id==editId):{m:MAPEL[0],k:11,b:'',q:'',o:['','','','',''],a:0,e:''};
-    return`<h1 class="text-2xl font-bold mb-4">Bank Soal</h1>${tabs}<div class="card p-5 max-w-3xl">
-    <div class="grid md:grid-cols-3 gap-3"><div><label class="k">Mapel</label>${sel('f-m',MAPEL,x.m,'onchange="refBab()"')}</div><div><label class="k">Kelas</label>${sel('f-k',[11,12],x.k,'onchange="refBab()"')}</div><div><label class="k">Bab</label><select id="f-b">${babOpts(x.m,x.k,x.b)}</select></div></div>
-    <label class="k">Soal (teks biasa / LaTeX sederhana: x^2, H_2O, \\frac{a}{b}, \\sqrt{x}, **tebal**)</label><textarea id="f-q" rows="4">${esc(x.q)}</textarea>
-    ${[0,1,2,3,4].map(i=>`<label class="k">Pilihan ${L[i]}</label><input id="f-o${i}" value="${esc(x.o[i]||'')}">`).join('')}
-    <label class="k">Jawaban Benar</label>${sel('f-a',L.split(''),L[x.a])}
-    <label class="k">Pembahasan</label><textarea id="f-e" rows="3">${esc(x.e)}</textarea>
-    <label class="k">Gambar Soal (opsional, disimpan sebagai base64)</label><input type="file" accept="image/*" onchange="readImg(this)"><div id="prev" class="mt-2">${IMG?`<img src="${IMG}" class="max-h-40 rounded"> <button class="btn mt-2" onclick="IMG=null;$('#prev').innerHTML=''">Hapus gambar</button>`:''}</div>
-    <div class="mt-5 flex gap-2"><button class="btn pri" onclick="saveQ()">💾 Simpan</button><button class="btn" onclick="bankTab='list';editId=null;IMG=null;go()">Batal</button></div></div>`}
-  const list=CQ.filter(x=>(!BF.m||x.m==BF.m)&&(!BF.k||x.k==BF.k)&&(!BF.b||x.b==BF.b)),bs=MATERI.filter(x=>(!BF.m||x.m==BF.m)&&(!BF.k||x.k==BF.k));
-  return`<h1 class="text-2xl font-bold mb-4">Bank Soal</h1>${tabs}<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-  <select onchange="setBF('m',this.value)"><option value="">Semua mapel</option>${MAPEL.map(m=>`<option ${m==BF.m?'selected':''}>${m}</option>`).join('')}</select>
+const selV=(id,a,v,ex='')=>`<select id="${id}" ${ex}>${a.map(([x,t])=>`<option value="${x}" ${x==v?'selected':''}>${t}</option>`).join('')}</select>`;
+const okF=x=>(!BF.m||x.m==BF.m)&&(!BF.k||x.k==BF.k)&&(!BF.b||x.b==BF.b);
+function setBF(f,v){BF[f]=v;if(f!='b')BF.b='';if(bankTab=='prac')PR=null;go()}
+const TABS=[['list','Daftar Soal (Semua)'],['add','Tambah Soal Baru'],['prac','Latihan Soal']];
+function bank(){const tabs=`<div class="flex flex-wrap gap-2 mb-5">${TABS.map(([k,t])=>`<button class="btn ${bankTab==k?'pri':''}" onclick="${k=='add'?'newQ()':`bankTab='${k}';editId=null;IMG=null;go()`}">${k=='add'&&editId?'Edit Soal':t}</button>`).join('')}</div>`,h=`<h1 class="text-xl md:text-2xl font-bold mb-4">Bank Soal</h1>${tabs}`;
+  if(bankTab=='add')return h+form();return h+filt()+(bankTab=='prac'?prac():list())}
+function filt(){const bs=MATERI.filter(x=>(!BF.m||x.m==BF.m)&&(!BF.k||x.k==BF.k));
+  return`<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3"><select onchange="setBF('m',this.value)"><option value="">Semua mapel</option>${MAPEL.map(m=>`<option ${m==BF.m?'selected':''}>${m}</option>`).join('')}</select>
   <select onchange="setBF('k',this.value)"><option value="">Semua kelas</option>${[11,12].map(k=>`<option value="${k}" ${k==BF.k?'selected':''}>Kelas ${k}</option>`).join('')}</select>
-  <select class="col-span-2" onchange="setBF('b',this.value)"><option value="">Semua bab</option>${bs.map(x=>`<option ${x.b==BF.b?'selected':''}>${esc(x.b)}</option>`).join('')}</select></div>
-  <div class="flex flex-wrap gap-2 mb-4 items-center"><button class="btn" onclick="expQ()">⬇ Export Bank Soal</button><label class="btn cursor-pointer">⬆ Import Bank Soal<input type="file" accept=".json" class="hidden" onchange="impQ(event)"></label><span class="text-xs text-zinc-500">${list.length} dari ${CQ.length} soal custom</span></div>
-  ${list.length?list.map(x=>`<div class="card p-4 mb-3"><div class="text-xs text-zinc-500 mb-1">${esc(x.m)} · Kelas ${x.k} · ${esc(x.b)}</div><div>${fmt(x.q)}</div>${x.img?`<img src="${x.img}" class="my-2 max-h-60 rounded">`:''}
-  <div class="grid md:grid-cols-2 gap-1 mt-2 text-sm">${x.o.map((o,i)=>`<div class="${i==x.a?'text-green-400 font-semibold':''}">${L[i]}. ${fmt(o)}</div>`).join('')}</div>
-  <details class="mt-2 text-sm"><summary class="cursor-pointer text-blue-400">Pembahasan</summary><div class="mt-1 text-zinc-400">${fmt(x.e)||'-'}</div></details>
-  <div class="mt-3 flex gap-2"><button class="btn" onclick="editQ('${x.id}')">✏️ Edit</button><button class="btn" onclick="delQ('${x.id}')">🗑 Hapus</button></div></div>`).join(''):`<div class="card p-6 text-zinc-500 text-sm">Belum ada soal custom yang cocok. Tambahkan lewat tab "Tambah Soal Baru". Soal default (otomatis) tetap dipakai di Tryout.</div>`}`}
+  <select class="col-span-2" onchange="setBF('b',this.value)"><option value="">Semua bab</option>${bs.map(x=>`<option ${x.b==BF.b?'selected':''}>${esc(x.b)}</option>`).join('')}</select></div>`}
+function form(){const x=editId?CQ.find(z=>z.id==editId):{m:MAPEL[0],k:11,b:'',q:'',o:[],a:0,e:'',t:'pg',ans:''},is=isIsi(x),o=x.o&&x.o.length?x.o:['','','','',''];
+  return`<div class="card p-4 md:p-5 max-w-3xl">
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3"><div><label class="k" style="margin-top:0">Mapel</label>${sel('f-m',MAPEL,x.m,'onchange="refBab()"')}</div><div><label class="k" style="margin-top:0">Kelas</label>${sel('f-k',[11,12],x.k,'onchange="refBab()"')}</div><div><label class="k" style="margin-top:0">Bab</label><select id="f-b">${babOpts(x.m,x.k,x.b)}</select></div></div>
+  <label class="k">Tipe Soal</label>${selV('f-t',[['pg','Pilihan Ganda (A–E)'],['isian','Isian Singkat']],is?'isian':'pg','onchange="tipeSw()"')}
+  <label class="k">Soal — LaTeX sederhana: x^2, H_2O, \\frac{a}{b}, \\sqrt{x}, **tebal**</label>
+  <div class="flex flex-wrap gap-1 mb-2">${'→ ⇌ Δ ° ⁺ ⁻ ² ³ · × − √ π ∫ ≤ ≥ ≈ ½'.split(' ').map(s=>`<button type="button" class="tb" onclick="ins('${s}')">${s}</button>`).join('')}<button type="button" class="tb" onclick="autoSub()">Auto subskrip kimia (H2O → H_{2}O)</button></div>
+  <textarea id="f-q" rows="4" onfocus="LF=this">${esc(x.q)}</textarea>
+  <div id="pgbox" class="${is?'hidden':''}">${[0,1,2,3,4].map(i=>`<label class="k">Pilihan ${L[i]}</label><input id="f-o${i}" value="${esc(o[i]||'')}" onfocus="LF=this">`).join('')}<label class="k">Jawaban Benar</label>${sel('f-a',L.split(''),L[x.a>=0?x.a:0])}</div>
+  <div id="isbox" class="${is?'':'hidden'}"><label class="k">Jawaban Benar (isian)</label><input id="f-ans" value="${esc(x.ans||'')}" onfocus="LF=this" placeholder="mis. 12,5  atau  KMnO4;kalium permanganat"><div class="text-[11px] text-zinc-500 mt-1">Beberapa jawaban yang diterima dipisah titik koma (;). Angka dibandingkan sebagai nilai (koma/titik desimal dianggap sama, spasi & huruf besar diabaikan).</div></div>
+  <label class="k">Pembahasan</label><textarea id="f-e" rows="3" onfocus="LF=this">${esc(x.e)}</textarea>
+  <label class="k">Gambar Soal (opsional, disimpan sebagai base64)</label><input type="file" accept="image/*" onchange="readImg(this)"><div id="prev" class="mt-2">${IMG?`<img src="${IMG}" class="max-h-40 rounded"> <button class="btn mt-2" onclick="IMG=null;$('#prev').innerHTML=''">Hapus gambar</button>`:''}</div>
+  <div class="mt-5 flex gap-2"><button class="btn pri" onclick="saveQ()">💾 Simpan</button><button class="btn" onclick="bankTab='list';editId=null;IMG=null;go()">Batal</button></div></div>`}
+function tipeSw(){const i=$('#f-t').value=='isian';$('#pgbox').classList.toggle('hidden',i);$('#isbox').classList.toggle('hidden',!i)}
+const cur=()=>LF&&document.body.contains(LF)?LF:$('#f-q');
+function ins(s){const e=cur(),a=e.selectionStart||0,b=e.selectionEnd||0;e.value=e.value.slice(0,a)+s+e.value.slice(b);e.focus();e.selectionStart=e.selectionEnd=a+s.length}
+function autoSub(){const e=cur();e.value=e.value.replace(/([A-Z][a-z]?|\))(\d+)/g,'$1_{$2}');e.focus()}
 function newQ(){bankTab='add';editId=null;IMG=null;go()}
 function editQ(id){editId=id;IMG=CQ.find(x=>x.id==id).img||null;bankTab='add';go()}
 function refBab(){$('#f-b').innerHTML=babOpts($('#f-m').value,+$('#f-k').value)}
 function readImg(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,900/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);IMG=c.toDataURL('image/jpeg',.82);$('#prev').innerHTML=`<img src="${IMG}" class="max-h-40 rounded">`};im.src=r.result};r.readAsDataURL(f)}
-async function saveQ(){const o=[0,1,2,3,4].map(i=>$('#f-o'+i).value.trim()),q=$('#f-q').value.trim();
-  if(!q||o.some(x=>!x))return toast('Soal dan pilihan A–E wajib diisi');
-  const x={id:editId||'q'+Date.now(),m:$('#f-m').value,k:+$('#f-k').value,b:$('#f-b').value,q,o,a:L.indexOf($('#f-a').value),e:$('#f-e').value.trim(),img:IMG};
-  await put('q',x.id,x);const i=CQ.findIndex(z=>z.id==x.id);i<0?CQ.push(x):CQ[i]=x;bankTab='list';editId=null;IMG=null;toast('Soal tersimpan');go()}
-async function delQ(id){if(!confirm('Hapus soal ini?'))return;await del('q',id);CQ=CQ.filter(x=>x.id!=id);go()}
+async function saveQ(){const t=$('#f-t').value,q=$('#f-q').value.trim();if(!q)return toast('Soal wajib diisi');
+  const x={id:editId||'q'+Date.now(),m:$('#f-m').value,k:+$('#f-k').value,b:$('#f-b').value,q,e:$('#f-e').value.trim(),img:IMG,t};
+  if(t=='isian'){const an=$('#f-ans').value.trim();if(!an)return toast('Jawaban isian wajib diisi');x.ans=an;x.o=[];x.a=-1}
+  else{const o=[0,1,2,3,4].map(i=>$('#f-o'+i).value.trim());if(o.some(v=>!v))return toast('Pilihan A–E wajib diisi');x.o=o;x.a=L.indexOf($('#f-a').value)}
+  const i=CQ.findIndex(z=>z.id==x.id);i<0?CQ.push(x):CQ[i]=x;bankTab='list';editId=null;IMG=null;await put('q',x.id,x);toast('Soal tersimpan');go()}
+async function delQ(id){if(!confirm('Hapus soal ini?'))return;CQ=CQ.filter(x=>x.id!=id);await del('q',id);go()}
 function expQ(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(CQ,null,2)],{type:'application/json'}));a.download='stpn-bank-soal.json';a.click()}
-function impQ(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const j=JSON.parse(r.result);if(!Array.isArray(j))throw 0;let n=0;for(const x of j){if(!x.q||!Array.isArray(x.o)||x.o.length<2||typeof x.a!=='number')continue;x.id=x.id||'q'+Date.now()+n;await put('q',x.id,x);const i=CQ.findIndex(z=>z.id==x.id);i<0?CQ.push(x):CQ[i]=x;n++}toast(`${n} soal diimpor`);go()}catch(err){toast('File JSON tidak valid')}};r.readAsText(f);e.target.value=''}
+function impQ(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{const j=JSON.parse(r.result);if(!Array.isArray(j))throw 0;let n=0;for(const x of j){if(!x.q||!(x.t==='isian'?x.ans:Array.isArray(x.o)&&x.o.length>=2&&typeof x.a==='number'))continue;x.id=x.id||'q'+Date.now()+n;const i=CQ.findIndex(z=>z.id==x.id);i<0?CQ.push(x):CQ[i]=x;await put('q',x.id,x);n++}toast(`${n} soal diimpor`);go()}catch(err){toast('File JSON tidak valid')}};r.readAsText(f);e.target.value=''}
+function list(){const l=CQ.filter(okF);return`<div class="flex flex-wrap gap-2 mb-4 items-center"><button class="btn" onclick="expQ()">⬇ Export Bank Soal</button><label class="btn cursor-pointer">⬆ Import Bank Soal<input type="file" accept=".json" class="hidden" onchange="impQ(event)"></label><span class="text-xs text-zinc-500">${l.length} dari ${CQ.length} soal custom</span></div>`+
+  (l.length?l.map(x=>`<div class="card p-4 mb-3"><div class="text-xs text-zinc-500 mb-1">${esc(x.m)} · Kelas ${x.k} · ${esc(x.b)} · <span class="text-blue-400">${isIsi(x)?'Isian':'Pilihan Ganda'}</span></div><div class="break-words">${fmt(x.q)}</div>${x.img?`<img src="${x.img}" class="my-2 max-h-60 rounded">`:''}
+  ${isIsi(x)?`<div class="text-green-400 text-sm mt-2">Jawaban: ${esc(x.ans)}</div>`:`<div class="grid md:grid-cols-2 gap-1 mt-2 text-sm">${x.o.map((o,i)=>`<div class="${i==x.a?'text-green-400 font-semibold':''}">${L[i]}. ${fmt(o)}</div>`).join('')}</div>`}
+  <details class="mt-2 text-sm"><summary class="cursor-pointer text-blue-400">Pembahasan</summary><div class="mt-1 text-zinc-400">${fmt(x.e)||'-'}</div></details>
+  <div class="mt-3 flex gap-2"><button class="btn" onclick="editQ('${x.id}')">✏️ Edit</button><button class="btn" onclick="delQ('${x.id}')">🗑 Hapus</button></div></div>`).join(''):`<div class="card p-6 text-zinc-500 text-sm">Belum ada soal custom yang cocok. Tambahkan lewat tab "Tambah Soal Baru", atau coba tab "Latihan Soal" untuk soal default otomatis.</div>`)}
+function nextPR(){const cu=CQ.filter(okF);let q=null;if(cu.length&&Math.random()<.5)q=pick(cu);else for(let t=0;t<4000&&!q;t++){const x=genQ();if(okF(x))q=x}if(!q&&cu.length)q=pick(cu);PR=q?{q,a:null,done:false}:{none:1};go()}
+const prPick=j=>{PR.a=j;PR.done=true;go()};function prCheck(){const v=$('#pri').value.trim();if(!v)return toast('Isi jawaban dulu');PR.a=v;PR.done=true;go()}
+function prac(){if(!PR)return`<div class="card p-5"><p class="text-zinc-400 text-sm mb-3">Latihan memakai soal custom + soal default otomatis (pilihan ganda & isian) sesuai filter di atas.</p><button class="btn pri" onclick="nextPR()">Mulai Latihan</button></div>`;
+  if(PR.none)return`<div class="card p-5 text-sm text-zinc-400">Belum ada soal (default maupun custom) untuk filter ini. Pilih bab lain, atau tambahkan soal sendiri di tab "Tambah Soal Baru".</div>`;
+  const q=PR.q,d=PR.done,ok=d&&isOk(q,PR.a);
+  return`<div class="card p-4 md:p-5"><div class="text-xs text-zinc-500 mb-2">${esc(q.m)} · Kelas ${q.k} · ${esc(q.b)} · ${isIsi(q)?'Isian':'Pilihan Ganda'}</div><div class="break-words">${fmt(q.q)}</div>${q.img?`<img src="${q.img}" class="my-2 max-h-60 rounded">`:''}
+  ${isIsi(q)?`<div class="flex gap-2 mt-3"><input id="pri" ${d?'disabled':''} value="${d?esc(PR.a):''}" placeholder="Tulis jawabanmu" onkeydown="if(event.key=='Enter')prCheck()"><button class="btn pri" ${d?'disabled':''} onclick="prCheck()">Cek</button></div>`:q.o.map((o,j)=>`<button class="opt ${d?(j==q.a?'ok':j===PR.a?'bad':''):''}" ${d?'disabled':''} onclick="prPick(${j})"><b>${L[j]}.</b> ${fmt(o)}</button>`).join('')}
+  ${d?`<div class="mt-3 text-sm bg-black/40 p-3 rounded-lg"><b class="${ok?'text-green-400':'text-red-400'}">${ok?'✅ Benar':'❌ Salah'}</b>${isIsi(q)?` · Kunci: <b>${esc(q.ans)}</b>`:''}<div class="mt-1 text-zinc-400">${fmt(q.e)}</div></div><button class="btn pri mt-3" onclick="nextPR()">Soal berikutnya →</button>`:''}</div>`}
 
 /* ===== Tryout ===== */
 function tryout(){if(TO)return toRun();if(RES)return resView(RES);
-  return`<h1 class="text-2xl font-bold mb-1">Tryout UTBK</h1><p class="text-zinc-500 text-sm mb-5">Soal diacak dari Bank Soal custom (${CQ.length}) + soal default otomatis.</p>
-  <div class="card p-5 max-w-md mb-6"><label class="k" style="margin-top:0">Jumlah soal</label><select id="tn"><option value="50">50 soal · 90 menit</option><option value="75">75 soal · 135 menit</option><option value="100">100 soal · 180 menit</option></select>
+  return`<h1 class="text-xl md:text-2xl font-bold mb-1">Tryout UTBK</h1><p class="text-zinc-500 text-sm mb-5">Soal diacak dari Bank Soal custom (${CQ.length}) + soal default otomatis (pilihan ganda & isian).</p>
+  <div class="card p-4 md:p-5 max-w-md mb-6"><label class="k" style="margin-top:0">Jumlah soal</label><select id="tn"><option value="50">50 soal · 90 menit</option><option value="75">75 soal · 135 menit</option><option value="100">100 soal · 180 menit</option></select>
   <label class="k">Sumber soal</label><select id="ts"><option value="all">Semua Soal</option><option value="mat">Hanya Matematika</option><option value="k12">Hanya Kelas 12</option><option value="custom">Hanya Soal Custom</option></select><button class="btn pri mt-4" onclick="startTO()">Mulai Tryout</button></div>
-  <h3 class="font-semibold mb-2">Riwayat Tryout</h3>${HIST.length?[...HIST].reverse().map(h=>`<div class="card p-3 mb-2 flex justify-between items-center text-sm"><span>${new Date(h.date).toLocaleString('id-ID')} · ${h.n} soal</span><span>${h.correct} benar · <b class="text-blue-400">${h.score}</b> <button class="btn ml-2" onclick="showRes('${h.id}')">Lihat</button></span></div>`).join(''):'<div class="text-zinc-500 text-sm">Belum ada riwayat.</div>'}`}
+  <h3 class="font-semibold mb-2">Riwayat Tryout</h3>${HIST.length?[...HIST].reverse().map(h=>`<div class="card p-3 mb-2 flex flex-wrap justify-between items-center gap-2 text-sm"><span>${new Date(h.date).toLocaleString('id-ID')} · ${h.n} soal</span><span>${h.correct} benar · <b class="text-blue-400">${h.score}</b> <button class="btn ml-2" onclick="showRes('${h.id}')">Lihat</button></span></div>`).join(''):'<div class="text-zinc-500 text-sm">Belum ada riwayat.</div>'}`}
 function startTO(){let n=+$('#tn').value,src=$('#ts').value,dur={50:90,75:135,100:180}[n];
   if(src=='custom'){if(!CQ.length)return toast('Belum ada soal custom');if(CQ.length<n){n=CQ.length;dur=Math.max(1,Math.round(n*1.8));toast(`Soal custom hanya ${n}, tryout disesuaikan`)}}
   const ok=src=='mat'?x=>x.m.startsWith('Matematika'):src=='k12'?x=>x.k==12:()=>true;let qs=shuf(CQ.filter(ok)).slice(0,n);
   if(src!='custom'){const seen=new Set(qs.map(x=>x.q));let t=0;while(qs.length<n&&t++<20000){const x=genQ();if(ok(x)&&!seen.has(x.q)){seen.add(x.q);qs.push(x)}}while(qs.length<n){let x;do{x=genQ()}while(!ok(x));qs.push(x)}}
   TO={qs:shuf(qs),ans:Array(n).fill(null),flag:Array(n).fill(false),cur:0,n,dur,end:Date.now()+dur*60000};RES=null;go('to')}
 function toRun(){const i=TO.cur,q=TO.qs[i];
-  return`<div class="flex flex-col lg:flex-row gap-4"><div class="flex-1 card p-5"><div class="flex justify-between text-xs text-zinc-500 mb-3"><span>Soal ${i+1}/${TO.n} · ${esc(q.m)} · ${esc(q.b)}</span>${TO.flag[i]?'<span class="text-yellow-400">● Ragu-ragu</span>':''}</div>
-  <div class="leading-relaxed">${fmt(q.q)}</div>${q.img?`<img src="${q.img}" class="my-3 max-h-64 rounded">`:''}
-  ${q.o.map((o,j)=>`<button class="opt ${TO.ans[i]===j?'sel':''}" onclick="TO.ans[TO.cur]=${j};go()"><b>${L[j]}.</b> ${fmt(o)}</button>`).join('')}
+  return`<div class="flex flex-col lg:flex-row gap-4"><div class="flex-1 min-w-0 card p-4 md:p-5"><div class="flex justify-between gap-2 text-xs text-zinc-500 mb-3"><span>Soal ${i+1}/${TO.n} · ${esc(q.m)} · ${esc(q.b)}</span>${TO.flag[i]?'<span class="text-yellow-400 shrink-0">● Ragu-ragu</span>':''}</div>
+  <div class="leading-relaxed break-words">${fmt(q.q)}</div>${q.img?`<img src="${q.img}" class="my-3 max-h-64 rounded">`:''}
+  ${isIsi(q)?`<input id="isi" class="mt-3" placeholder="Tulis jawabanmu (angka / kata)" value="${esc(TO.ans[i]||'')}" oninput="setIsi(this)" onkeydown="if(event.key=='Enter')navQ(${i+1})">`:q.o.map((o,j)=>`<button class="opt ${TO.ans[i]===j?'sel':''}" onclick="TO.ans[TO.cur]=${j};go()"><b>${L[j]}.</b> ${fmt(o)}</button>`).join('')}
   <div class="flex flex-wrap gap-2 mt-5"><button class="btn" ${i?'':'disabled'} onclick="navQ(${i-1})">← Sebelumnya</button><button class="btn" onclick="TO.flag[TO.cur]=!TO.flag[TO.cur];go()">🚩 Tandai Ragu-ragu</button><button class="btn" onclick="TO.ans[TO.cur]=null;go()">Kosongkan</button><button class="btn pri" ${i<TO.n-1?'':'disabled'} onclick="navQ(${i+1})">Berikutnya →</button></div></div>
   <div class="lg:w-72 card p-4 h-fit"><div class="text-xs text-zinc-500">Sisa waktu</div><div id="totmr" class="text-3xl font-bold text-blue-400 mb-3"></div>
-  <div class="grid grid-cols-5 gap-1.5">${TO.ans.map((a,j)=>`<button class="nb ${TO.flag[j]?'f':a!==null?'a':''} ${j==i?'cur':''}" onclick="navQ(${j})">${j+1}</button>`).join('')}</div>
+  <div class="grid grid-cols-8 sm:grid-cols-10 lg:grid-cols-5 gap-1.5">${TO.ans.map((a,j)=>`<button class="nb ${TO.flag[j]?'f':filled(a)?'a':''} ${j==i?'cur':''}" onclick="navQ(${j})">${j+1}</button>`).join('')}</div>
   <div class="text-[11px] text-zinc-500 mt-3">Abu = belum · <span class="text-blue-400">Biru</span> = dijawab · <span class="text-yellow-400">Kuning</span> = ragu-ragu</div><button class="btn pri w-full mt-4" onclick="submitTO()">Selesai</button></div></div>`}
+function setIsi(el){const v=el.value.trim();TO.ans[TO.cur]=v||null;const b=document.querySelectorAll('.nb')[TO.cur];if(b&&!TO.flag[TO.cur])b.classList.toggle('a',!!v);DB.app.setItem('to',TO).catch(()=>{})}
 function navQ(i){if(i>=0&&i<TO.n){TO.cur=i;go()}}
-async function submitTO(auto){const empty=TO.ans.filter(a=>a===null).length;if(!auto&&!confirm(empty?`Masih ${empty} soal kosong. Selesaikan tryout?`:'Selesaikan tryout?'))return;
-  const c=TO.qs.filter((q,i)=>TO.ans[i]===q.a).length,r={id:'t'+Date.now(),date:Date.now(),n:TO.n,correct:c,wrong:TO.n-c-empty,empty,score:Math.round(c/TO.n*1000)/10,dur:TO.dur,qs:TO.qs,ans:TO.ans};
+async function submitTO(auto){const empty=TO.ans.filter(a=>!filled(a)).length;if(!auto&&!confirm(empty?`Masih ${empty} soal kosong. Selesaikan tryout?`:'Selesaikan tryout?'))return;
+  const c=TO.qs.filter((q,i)=>isOk(q,TO.ans[i])).length,r={id:'t'+Date.now(),date:Date.now(),n:TO.n,correct:c,wrong:TO.n-c-empty,empty,score:Math.round(c/TO.n*1000)/10,dur:TO.dur,qs:TO.qs,ans:TO.ans};
   HIST.push(r);TO=null;RES=r;await put('to',r.id,r);if(auto)beep();go('to')}
 function showRes(id){RES=HIST.find(h=>h.id==id);go('to')}
-function resView(r){return`<div class="flex justify-between items-center mb-4"><h1 class="text-2xl font-bold">Hasil Tryout</h1><button class="btn" onclick="RES=null;go()">← Kembali</button></div>
-  <div class="card p-6 mb-5"><div class="text-xs text-zinc-500">NILAI</div><div class="text-6xl font-extrabold text-blue-400">${r.score}</div><div class="text-sm mt-2 text-zinc-400"><span class="text-green-400">${r.correct} benar</span> · <span class="text-red-400">${r.wrong} salah</span> · ${r.empty} kosong · dari ${r.n} soal</div></div>
-  ${r.qs.map((q,i)=>{const a=r.ans[i],ok=a===q.a;return`<div class="card p-4 mb-3"><div class="text-xs mb-1 ${ok?'text-green-400':a===null?'text-zinc-500':'text-red-400'}">${i+1}. ${esc(q.m)} · ${esc(q.b)} · ${ok?'Benar':a===null?'Kosong':'Salah'}</div><div>${fmt(q.q)}</div>${q.img?`<img src="${q.img}" class="my-2 max-h-52 rounded">`:''}
-  ${q.o.map((o,j)=>`<div class="opt ${j==q.a?'ok':j===a?'bad':''}"><b>${L[j]}.</b> ${fmt(o)}</div>`).join('')}<div class="mt-3 text-sm bg-black/40 p-3 rounded-lg"><b class="text-blue-400">Pembahasan:</b> ${fmt(q.e)||'-'}</div></div>`}).join('')}`}
+function resView(r){return`<div class="flex justify-between items-center mb-4"><h1 class="text-xl md:text-2xl font-bold">Hasil Tryout</h1><button class="btn" onclick="RES=null;go()">← Kembali</button></div>
+  <div class="card p-5 md:p-6 mb-5"><div class="text-xs text-zinc-500">NILAI</div><div class="text-5xl md:text-6xl font-extrabold text-blue-400">${r.score}</div><div class="text-sm mt-2 text-zinc-400"><span class="text-green-400">${r.correct} benar</span> · <span class="text-red-400">${r.wrong} salah</span> · ${r.empty} kosong · dari ${r.n} soal</div></div>
+  ${r.qs.map((q,i)=>{const a=r.ans[i],ok=isOk(q,a),em=!filled(a);return`<div class="card p-4 mb-3"><div class="text-xs mb-1 ${ok?'text-green-400':em?'text-zinc-500':'text-red-400'}">${i+1}. ${esc(q.m)} · ${esc(q.b)} · ${ok?'Benar':em?'Kosong':'Salah'}</div><div class="break-words">${fmt(q.q)}</div>${q.img?`<img src="${q.img}" class="my-2 max-h-52 rounded">`:''}
+  ${isIsi(q)?`<div class="opt ok">Kunci: ${esc(q.ans)}</div><div class="opt ${ok?'ok':'bad'}">Jawabanmu: ${em?'—':esc(a)}</div>`:q.o.map((o,j)=>`<div class="opt ${j==q.a?'ok':j===a?'bad':''}"><b>${L[j]}.</b> ${fmt(o)}</div>`).join('')}<div class="mt-3 text-sm bg-black/40 p-3 rounded-lg break-words"><b class="text-blue-400">Pembahasan:</b> ${fmt(q.e)||'-'}</div></div>`}).join('')}`}
 
-/* ===== Init ===== */
+/* ===== Init & auto-save ===== */
+addEventListener('pagehide',mirror);document.addEventListener('visibilitychange',()=>{if(document.hidden)mirror()});
+document.addEventListener('toggle',e=>{const k=e.target.dataset&&e.target.dataset.key;if(k&&OPEN[k]!==e.target.open){OPEN[k]=e.target.open;saveUI()}},true);
 (async()=>{
   try{
     await Promise.all([DB.prog.iterate((v,k)=>{P[k]=v}),DB.q.iterate(v=>{CQ.push(v)}),DB.to.iterate(v=>{HIST.push(v)}),DB.ses.iterate(v=>{SESS.push(v)}),DB.notes.iterate((v,k)=>{NOTES[k]=v})]);
     HIST.sort((a,b)=>a.date-b.date);
     const s=await DB.app.getItem('timer');if(s)Object.assign(T,{left:s.left,run:s.run,end:s.end,started:s.started,sel:s.sel===undefined?'':s.sel});
-  }catch(e){toast('IndexedDB tidak tersedia — data tidak akan persisten')}
-  go('dash');if(T.run&&tLeft()<=0)finishSession(true);setInterval(tick,250);sync();
+    const u=await DB.app.getItem('ui');if(u){view=u.view||'dash';bankTab=u.bankTab||'list';BF=u.BF||BF;OPEN=u.OPEN||{}}
+    const to=await DB.app.getItem('to');if(to)TO=to;
+  }catch(e){toast('IndexedDB bermasalah — memakai cadangan browser')}
+  try{const m=JSON.parse(localStorage.getItem('stpn_mirror')||'null');if(m){
+    if(!Object.keys(P).length&&!CQ.length&&!SESS.length&&!Object.keys(NOTES).length){P=m.P||{};NOTES=m.NOTES||{};SESS=m.SESS||[];CQ=m.CQ||[];
+      for(const k in P)DB.prog.setItem(k,true).catch(()=>{});for(const k in NOTES)DB.notes.setItem(k,NOTES[k]).catch(()=>{});SESS.forEach(x=>DB.ses.setItem(x.id,x).catch(()=>{}));CQ.forEach(x=>DB.q.setItem(x.id,x).catch(()=>{}))}
+    else for(const k in m.NOTES||{})if(NOTES[k]!==m.NOTES[k]){NOTES[k]=m.NOTES[k];DB.notes.setItem(k,NOTES[k]).catch(()=>{})}}}catch(e){}
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  go();if(T.run&&tLeft()<=0)finishSession(true);if(TO&&toLeft()<=0)submitTO(true);setInterval(tick,250);sync();
 })();
 </script>
 </body>
